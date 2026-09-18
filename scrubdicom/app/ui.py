@@ -384,7 +384,8 @@ class App(tk.Tk):
 
         # ---- step 1: scans
         s1 = self.steps[0]
-        ttk.Label(s1, text=STEP_TITLES[0], style="Title.TLabel").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 10))
+        ttk.Label(s1, text=STEP_TITLES[0], style="Title.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        self._step_nav(s1, 0)
         tiles = ttk.Frame(s1)
         tiles.grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 8))
         self.tiles = {}
@@ -420,7 +421,8 @@ class App(tk.Tk):
 
         # ---- step 2: output
         s2 = self.steps[1]
-        ttk.Label(s2, text=STEP_TITLES[1], style="Title.TLabel").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 10))
+        ttk.Label(s2, text=STEP_TITLES[1], style="Title.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        self._step_nav(s2, 1)
         self._row(s2, 1, "Output folder", self.v_output, "dir", "One folder per patient plus _logs and _review will be created here. Only anonymised files and non-confidential logs ever go here.")
         ttk.Button(s2, text="Open", command=lambda: self._open(self._out())).grid(row=1, column=4, padx=(8, 0))
         ttk.Label(s2, textvariable=self.v_out_status, style="Muted.TLabel").grid(row=2, column=0, columnspan=5, sticky="w")
@@ -432,7 +434,8 @@ class App(tk.Tk):
 
         # ---- step 3: review and go
         s3 = self.steps[2]
-        ttk.Label(s3, text=STEP_TITLES[2], style="Title.TLabel").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 10))
+        ttk.Label(s3, text=STEP_TITLES[2], style="Title.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        self._step_nav(s3, 2)
         ttk.Label(s3, text="Profile").grid(row=1, column=0, sticky="w", padx=(0, 12), pady=6)
         prow = ttk.Frame(s3)
         prow.grid(row=1, column=1, columnspan=3, sticky="w", pady=6)
@@ -523,6 +526,20 @@ class App(tk.Tk):
         ys.grid(row=0, column=1, sticky="ns")
         self._profile_entries = []
         self._refresh_profile_label()
+
+    def _step_nav(self, frame, index: int) -> None:
+        """Back / Next beside the step title, so navigation is in view without scrolling to the bottom bar."""
+        nav = ttk.Frame(frame)
+        nav.grid(row=0, column=3, columnspan=2, sticky="e", pady=(0, 10))
+        b_back = ttk.Button(nav, text="\u2039 Back", width=8, command=lambda: self._show_step(index - 1))
+        b_back.pack(side="left")
+        if index == 0:
+            b_back.state(["disabled"])
+        if index < 2:
+            b_next = ttk.Button(nav, text="Next \u203a", width=8, style=theme.style_or("Accent.TButton"), command=lambda: self._show_step(index + 1))
+            b_next.pack(side="left", padx=(6, 0))
+            self._top_next = getattr(self, "_top_next", {})
+            self._top_next[index] = b_next
 
     def _apply_mode(self) -> None:
         mode = self.v_mode.get()
@@ -835,6 +852,9 @@ class App(tk.Tk):
         running = bool(self.proc and self.proc.running)
         ok_here = {0: not step1, 1: not step2, 2: not problems}[self.step]
         self.b_next.state(["!disabled"] if ok_here and self.step < 2 else ["disabled"])
+        top = getattr(self, "_top_next", {}).get(self.step)
+        if top is not None:
+            top.state(["!disabled"] if ok_here else ["disabled"])
         here = {0: step1, 1: step2, 2: problems}[self.step]
         self.v_nav_reason.set(("Next needs: " + here[0]) if here and self.step < 2 else "")
         previewed = self.previewed_key == self._spec_key()

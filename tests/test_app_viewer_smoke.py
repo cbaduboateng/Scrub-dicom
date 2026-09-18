@@ -140,6 +140,8 @@ def test_viewer_output_mode_quarantine(app, data, monkeypatch):
     assert w.th.get_children("") and "Header of the anonymised" in w.lbl_header.cget("text")
     # release unchanged (no boxes) after confirming the dialog
     monkeypatch.setattr(vw.messagebox, "askyesno", lambda *a, **k: True)
+    import scrubdicom.app.ui as ui_mod
+    monkeypatch.setattr(ui_mod, "confirm_typed", lambda *a, **k: True)   # the typed-YES dialog is modal
     before = len(list((out / "_review" / "CBB0701").glob("*.dcm")))
     w._do_release(False)
     assert pump(w, until=lambda: len(list((out / "_review" / "CBB0701").glob("*.dcm"))) == before - 1)
