@@ -1293,6 +1293,8 @@ class App(tk.Tk):
             return
         base = model.settings_path().parent / "sample"
         try:
+            import shutil
+            shutil.rmtree(base, ignore_errors=True)      # a fresh demo every time: synthetic data only, nothing to keep
             with contextlib.redirect_stdout(io.StringIO()):
                 fixtures.main(base / "scans")
             m = base / "patients.csv"
