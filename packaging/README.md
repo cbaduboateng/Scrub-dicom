@@ -12,7 +12,7 @@ Why PyInstaller and Tk, and what was rejected: `docs/packaging_evaluation.md`.
 | `build_windows.bat` | full Windows build: venv, tests, freeze, smoke test, optional Authenticode, zip, optional Inno Setup installer |
 | `windows_installer.iss` | Inno Setup script: per-user install, no admin rights |
 | `entitlements.plist` | hardened-runtime entitlements for signing on macOS (no network entitlement) |
-| `requirements-build.txt` | pinned versions for reproducible builds |
+| `requirements-build.in` / `.lock` | the build's dependencies; the lock pins every wheel by SHA-256 (`pip-compile --generate-hashes`) and `pip-audit` runs on it before every build |
 | `icons/make_icons.py` | draws `icon.png`, `icon.ico`, `icon.icns` |
 
 ## macOS
@@ -57,13 +57,15 @@ To sign: `set SCRUBDICOM_SIGNTOOL_ARGS=/fd SHA256 /tr http://timestamp.digicert.
 2. The frozen executable answers `--cli --help`.
 3. The frozen executable opens the window, draws every tab and closes (`--selftest`).
 4. The frozen engine anonymises the synthetic fixture patients and its own `verify` reports PASS.
-5. (macOS) The bundle contains no `requests`, `urllib3`, `tornado` or `numpy`.
+5. (macOS) The bundle contains no `requests`, `urllib3` or `tornado`, and decodes compressed pixel data.
+6. Dependencies install only if every wheel's hash matches the lock; `pip-audit` finds no known vulnerability.
+7. A software bill of materials (`*-sbom.json`) is written next to the DMG.
 
 If any step fails the build stops and nothing is shipped.
 
 ## Updating a dependency
 
-Change the pin in `requirements-build.txt`, run the build, then run the frozen app against a real
+Change the pin in `requirements-build.in`, run `pip-compile --generate-hashes --allow-unsafe -o packaging/requirements-build.lock packaging/requirements-build.in`, run the build, then run the frozen app against a real
 export from each vendor you support and verify it. pydicom releases occasionally change how they
 write file meta or handle deprecated arguments; the engine's `save_as(..., write_like_original=False)`
 call is one such place.

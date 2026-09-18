@@ -37,10 +37,10 @@ def test_app_never_touches_the_network():
     assert not forbidden.search(core), "engine imports a network module"
 
 
-def test_streamlit_dashboard_has_telemetry_off_and_binds_localhost():
-    src = (ROOT / "scrubdicom" / "dashboard" / "__init__.py").read_text()
-    assert '"--browser.gatherUsageStats", "false"' in src
-    assert '"--server.address", "127.0.0.1"' in src
+def test_no_web_server_anywhere_in_the_package():
+    forbidden = re.compile(r"\b(streamlit|flask|fastapi|tornado|http\.server|socketserver|uvicorn)\b")
+    for p in (ROOT / "scrubdicom").rglob("*.py"):
+        assert not forbidden.search(p.read_text()), f"{p} references a web server"
 
 
 def test_no_secrets_or_real_identifiers_in_source():

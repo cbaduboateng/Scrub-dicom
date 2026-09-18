@@ -21,7 +21,10 @@ set "VENV=.venv-build"
 if not exist "%VENV%\Scripts\python.exe" %PY% -m venv "%VENV%" || exit /b 1
 call "%VENV%\Scripts\activate.bat"
 python -m pip install -q --upgrade pip
-pip install -q -r packaging\requirements-build.txt -e . || exit /b 1
+pip install -q --require-hashes -r packaging\requirements-build.lock || exit /b 1
+pip install -q --no-deps -e . || exit /b 1
+echo == dependency audit
+python -m pip_audit --strict --desc -r packaging\requirements-build.in || exit /b 1
 
 echo == tests
 python -m pytest -q || exit /b 1

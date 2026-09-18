@@ -30,7 +30,16 @@ VENV=.venv-build
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
 python -m pip install -q --upgrade pip
-pip install -q -r packaging/requirements-build.txt -e .
+# hash-pinned: every wheel must match packaging/requirements-build.lock (regenerate with: pip-compile --generate-hashes packaging/requirements-build.in)
+if [ -f packaging/requirements-build.lock ]; then
+  pip install -q --require-hashes -r packaging/requirements-build.lock
+else
+  echo "WARNING: packaging/requirements-build.lock missing; installing pinned versions WITHOUT hash verification" >&2
+  pip install -q -r packaging/requirements-build.in
+fi
+pip install -q --no-deps -e .
+echo "== dependency audit"
+python -m pip_audit --strict --desc -r packaging/requirements-build.in || { echo "pip-audit found known vulnerabilities" >&2; exit 1; }
 
 echo "== tests"
 python -m pytest -q
@@ -96,6 +105,16 @@ if [ -n "${SCRUBDICOM_SIGN_IDENTITY:-}" ] && [ -n "${SCRUBDICOM_NOTARY_PROFILE:-
   xcrun stapler staple "$DMG"
 fi
 
+# software bill of materials: what is inside the bundle, with versions and licences
+python - "$VERSION" "$ARCH" > "dist/Scrub-DICOM-$VERSION-macOS-$ARCH-sbom.json" <<'PY'
+import json, sys, importlib.metadata as md, time
+pkgs = []
+for d in sorted(md.distributions(), key=lambda d: d.metadata["Name"].lower()):
+    m = d.metadata
+    pkgs.append({"name": m["Name"], "version": m["Version"], "license": (m.get("License-Expression") or m.get("License") or "")[:80]})
+print(json.dumps({"bomFormat": "scrub-dicom-simple", "generated": time.strftime("%Y-%m-%dT%H:%M:%S"), "app": "Scrub-DICOM",
+                  "version": sys.argv[1], "platform": f"macOS-{sys.argv[2]}", "components": pkgs}, indent=2))
+PY
 shasum -a 256 "$DMG" | tee "$DMG.sha256"
 du -sh "$APP" "$DMG"
 echo "Done: $DMG"

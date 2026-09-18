@@ -50,7 +50,7 @@ def test_runner_streams_progress_and_writes_log(fixtures, tmp_path):
     out = tmp_path / "out"
     m = tmp_path / "m.csv"
     m.write_text(f"source_folder,study_id\n{fixtures / 'ORFAN0231'},CBB0501\n{fixtures / 'ORFAN0418'},CBB0502\n{fixtures / 'nope'},CBB0503\n")
-    spec = model.JobSpec(mode="manifest", output=str(out), manifest=str(m), resume=True, ctca_only=False)
+    spec = model.JobSpec(mode="manifest", output=str(out), manifest=str(m), resume=True, ctca_only=False, confidential=str(tmp_path / "conf"))
     assert spec.validate() == []
     log = out / "_logs" / "app_run_test.txt"
     proc, lines = run_and_collect(spec.command(), log)
@@ -70,10 +70,10 @@ def test_runner_ctca_only_produces_series_decisions(fixtures, tmp_path):
     out = tmp_path / "out"
     m = tmp_path / "m.csv"
     m.write_text(f"source_folder,study_id\n{fixtures / 'ORFAN0231'},CBB0601\n")
-    spec = model.JobSpec(mode="manifest", output=str(out), manifest=str(m), resume=True, ctca_only=True)
+    spec = model.JobSpec(mode="manifest", output=str(out), manifest=str(m), resume=True, ctca_only=True, confidential=str(tmp_path / "conf"))
     proc, lines = run_and_collect(spec.command())
     assert proc.returncode == 0
-    rows = model.load_series_rows(out / "_logs")
+    rows = model.load_series_rows(tmp_path / "conf")
     assert rows and all(r["decision"] == "drop" for r in rows), "the 4- and 6-image fixture series are below the 100-image rule"
     assert any("NO CORONARY" in l for l in lines)
 
@@ -94,7 +94,7 @@ def test_dry_run_creates_nothing_including_no_app_log(fixtures, tmp_path):
     out = tmp_path / "out"
     m = tmp_path / "m.csv"
     m.write_text(f"source_folder,study_id\n{fixtures / 'ORFAN0231'},CBB0701\n")
-    spec = model.JobSpec(mode="manifest", output=str(out), manifest=str(m), dry_run=True)
+    spec = model.JobSpec(mode="manifest", output=str(out), manifest=str(m), dry_run=True, confidential=str(tmp_path / "conf"))
     proc, lines = run_and_collect(spec.command())
     assert proc.returncode == 0 and any(l.startswith("DRY RUN") for l in lines)
     assert not out.exists()

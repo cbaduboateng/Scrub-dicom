@@ -17,21 +17,21 @@ def test_manifest_spec_maps_every_field_to_a_flag(tmp_path):
     pk = tmp_path / "p.csv"
     pk.write_text("study_id,series_uid,series_description\n")
     spec = JobSpec(mode="manifest", output=str(tmp_path / "out"), manifest=str(m), remap="/Volumes/D=E:\\", series_pick=str(pk),
-                   ctca_only=True, resume=True, keep_technical=True, flat=True, dry_run=True)
+                   ctca_only=True, resume=True, keep_technical=True, flat=True, dry_run=True, confidential=str(tmp_path / "conf"))
     assert spec.validate() == []
     args = spec.run_args()
     assert args == ["--manifest", str(m), "--remap", "/Volumes/D=E:\\", "--resume", "--ctca-only", "--series-pick", str(pk),
-                    "--output", str(tmp_path / "out"), "--keep-technical", "--flat", "--dry-run"]
+                    "--output", str(tmp_path / "out"), "--keep-technical", "--flat", "--confidential", str(tmp_path / "conf"), "--dry-run"]
     assert spec.command()[-len(args):] == args and "run" in spec.command()
 
 
 def test_single_folder_spec(tmp_path):
     inp = tmp_path / "in"
     inp.mkdir()
-    spec = JobSpec(mode="single", output=str(tmp_path / "out"), input=str(inp), study_id="STUDY-017", ctca_only=True, resume=True)
+    spec = JobSpec(mode="single", output=str(tmp_path / "out"), input=str(inp), study_id="STUDY-017", ctca_only=True, resume=True, confidential=str(tmp_path / "conf"))
     assert spec.validate() == []
     args = spec.run_args()
-    assert args == ["--input", str(inp), "--study-id", "STUDY-017", "--output", str(tmp_path / "out")]
+    assert args == ["--input", str(inp), "--study-id", "STUDY-017", "--output", str(tmp_path / "out"), "--confidential", str(tmp_path / "conf")]
     assert "--ctca-only" not in args and "--resume" not in args, "manifest-only options must not leak into single-folder mode"
 
 
@@ -41,10 +41,10 @@ def test_mapping_spec(tmp_path):
     mp = tmp_path / "ids.xlsx"
     mp.write_bytes(b"")
     spec = JobSpec(mode="mapping", output=str(tmp_path / "out"), input=str(inp), mapping=str(mp), current_col="Hospital ID",
-                   new_col="Study ID", sheet="Sheet1", match_on="folder")
+                   new_col="Study ID", sheet="Sheet1", match_on="folder", confidential=str(tmp_path / "conf"))
     assert spec.validate() == []
     assert spec.run_args() == ["--input", str(inp), "--mapping", str(mp), "--current-col", "Hospital ID", "--new-col", "Study ID",
-                               "--sheet", "Sheet1", "--match-on", "folder", "--output", str(tmp_path / "out")]
+                               "--sheet", "Sheet1", "--match-on", "folder", "--output", str(tmp_path / "out"), "--confidential", str(tmp_path / "conf")]
 
 
 def test_validation_catches_the_usual_mistakes(tmp_path):
@@ -58,6 +58,11 @@ def test_validation_catches_the_usual_mistakes(tmp_path):
     assert any("must not be the input" in p for p in JobSpec(mode="single", output=str(inp), input=str(inp), study_id="S").validate())
     assert any("inside the input" in p for p in JobSpec(mode="single", output=str(inp / "out"), input=str(inp), study_id="S").validate())
     assert any("mapping file" in p.lower() for p in JobSpec(mode="mapping", output="o", input=str(inp)).validate())
+    assert any("confidential folder" in p.lower() for p in JobSpec(mode="single", output="o", input=str(inp), study_id="S").validate())
+    assert any("outside the output" in p for p in JobSpec(mode="single", output=str(tmp_path / "o"), input=str(inp), study_id="S", confidential=str(tmp_path / "o" / "c")).validate())
+    assert any("outside the output" in p for p in JobSpec(mode="single", output=str(tmp_path / "o"), input=str(inp), study_id="S", confidential=str(tmp_path)).validate())
+    assert model.suggest_confidential("/x/Anon").endswith("Anon_CONFIDENTIAL") and model.recheck_args("/x") == ["--output", "/x", "--recheck"]
+    assert model.verify_args("/out", [], False, "", "/conf") == ["--output", "/out", "--confidential", "/conf"]
 
 
 def test_verify_and_thick_args():
@@ -160,7 +165,8 @@ def test_share_readiness_blocks_until_verified_and_linkage_removed(tmp_path):
     assert any("other log file" in t and lvl == "warn" for t, lvl in levels.items())
     (out / "_logs" / "verify_20260109_000000.txt").write_text("PASS: ok\n")
     moved, folder = model.move_logs_out(out, tmp_path / "safe")
-    assert (out / "_logs" / "uid_salt.txt").exists(), "the salt must stay for re-runs"
+    assert not (out / "_logs" / "uid_salt.txt").exists(), "the salt goes with the linkage material"
+    assert any(p.name == "uid_salt.txt" for p in moved)
     assert not list((out / "_logs").glob("LINKAGE_*")) and not list((out / "_logs").glob("files_*"))
     assert folder.parent == (tmp_path / "safe").resolve() and "CONFIDENTIAL" in folder.name
     assert {p.name for p in moved} >= {"LINKAGE_20260102_000000_CONFIDENTIAL.csv", "files_20260102_000000.csv", "summary_20260102_000000.csv"}
@@ -175,6 +181,19 @@ def test_move_logs_refuses_destination_inside_output(tmp_path):
         model.move_logs_out(out, out / "somewhere")
     with pytest.raises(ValueError):
         model.move_logs_out(out, out)
+
+
+def test_redact_paths_and_error_log(tmp_path, monkeypatch):
+    txt = 'FileNotFoundError: /Users/someone/Scans/H1234567/IM-0001.dcm and C:\\Scans\\H1234567\\x.dcm in "/a/b/c"'
+    red = model.redact_paths(txt)
+    assert "H1234567" not in red and "<path>" in red
+    monkeypatch.setattr(model, "settings_path", lambda: tmp_path / "settings.json")
+    try:
+        raise ValueError("boom /Users/x/secret")
+    except ValueError as e:
+        import sys
+        p = model.record_error(*sys.exc_info())
+    assert p == tmp_path / "errors.log" and "boom <path>" in p.read_text() and "/Users/x" not in p.read_text()
 
 
 def test_linkage_files_found_anywhere_in_tree(tmp_path):

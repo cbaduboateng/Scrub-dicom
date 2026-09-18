@@ -45,7 +45,7 @@ pip install git+https://github.com/cbaduboateng/Scrub-dicom
 ```
 
 Python 3.9+, macOS / Windows / Linux. `pip install "scrub-dicom[xlsx]"` for Excel mapping files,
-`"scrub-dicom[dashboard]"` for the browser dashboard.
+`"scrub-dicom[app]"` for the desktop app from source.
 
 ## Quick start
 
@@ -89,15 +89,6 @@ text in quarantined files and release them. De-identification profiles let a stu
 5-year age bucket or shifted dates, within the limits DICOM PS3.15 allows; the default removes everything. It never
 connects to the internet. User guide:
 [docs/app_user_guide.md](docs/app_user_guide.md). From source: `pip install -e .` then `scrub-dicom-app`.
-
-### Developer dashboard
-
-```
-scrub-dicom-dashboard
-```
-
-The v0.1 Streamlit page, kept for developers (`pip install "scrub-dicom[dashboard]"`). It starts a local web
-server bound to 127.0.0.1 with telemetry off; the desktop app is the supported front end.
 
 ## Built for long unattended runs on unreliable hardware
 

@@ -88,6 +88,24 @@ def dose_sr(p, study_uid):
     return ds
 
 
+def us_image(p, study_uid):
+    """An ultrasound frame: text-prone modality, quarantined by the tag policy; carries the same identifiers."""
+    fm = FileMetaDataset()
+    fm.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.6.1"  # Ultrasound Image Storage
+    fm.MediaStorageSOPInstanceUID = generate_uid(); fm.TransferSyntaxUID = ExplicitVRLittleEndian
+    fm.ImplementationClassUID = "1.2.276.0.7230010.3.0.3.6.1"
+    ds = Dataset(); ds.file_meta = fm; ds.is_little_endian = True; ds.is_implicit_VR = False
+    ds.SOPClassUID = fm.MediaStorageSOPClassUID; ds.SOPInstanceUID = fm.MediaStorageSOPInstanceUID
+    ds.PatientName = p["name"]; ds.PatientID = p["pid"]; ds.PatientBirthDate = p["dob"]; ds.PatientSex = p["sex"]
+    ds.StudyDate = p["sdate"]; ds.StudyTime = "160000"; ds.Modality = "US"; ds.SeriesNumber = 7; ds.InstanceNumber = 1
+    ds.StudyInstanceUID = study_uid; ds.SeriesInstanceUID = generate_uid(); ds.Manufacturer = "PHILIPS"
+    ds.ImageType = ["ORIGINAL", "PRIMARY"]; ds.SeriesDescription = "Echo apical 4ch"
+    ds.Rows = 64; ds.Columns = 64; ds.SamplesPerPixel = 1; ds.PhotometricInterpretation = "MONOCHROME2"
+    ds.BitsAllocated = 8; ds.BitsStored = 8; ds.HighBit = 7; ds.PixelRepresentation = 0
+    ds.PixelData = np.random.default_rng(7).integers(0, 255, (64, 64), dtype=np.uint8).tobytes()
+    return ds
+
+
 def main(out):
     out = Path(out)
     for p in PATIENTS:
@@ -100,6 +118,8 @@ def main(out):
                 ds = ct_image(p, sno, sdesc, i, study_uid, suid, for_uid)
                 ds.save_as(str(d / f"IM-{sno:04d}-{i:04d}.dcm"), write_like_original=False); n += 1
         dose_sr(p, study_uid).save_as(str(d / "SR-0501-0001.dcm"), write_like_original=False); n += 1
+        if p["folder"] == "ORFAN0418":   # the second patient also has an ultrasound frame (quarantined by modality)
+            us_image(p, study_uid).save_as(str(d / "US-0007-0001.dcm"), write_like_original=False); n += 1
         (d / "notes.txt").write_text("not a dicom file")
         print(f"{p['folder']}: {n} DICOM files")
     with open(out / "mapping.csv", "w") as fh:

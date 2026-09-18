@@ -175,6 +175,7 @@ class App(tk.Tk):
         self._apply_mode()
         self._show_step(0)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.report_callback_exception = self._on_exception   # Tk callbacks: log (paths redacted) and tell the user
         self.v_output.trace_add("write", lambda *_: self._schedule_output_refresh())
         self.v_manifest.trace_add("write", lambda *_: self._schedule_output_refresh())
         self._refresh_all()
@@ -192,6 +193,7 @@ class App(tk.Tk):
         # paths are deliberately not remembered between launches: the app opens clean, and no folder names
         # (which are often hospital numbers) are ever written to the settings file
         self.v_output, self.v_manifest, self.v_remap, self.v_input = tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar()
+        self.v_confidential = tk.StringVar()
         self.v_study_id = tk.StringVar()
         self.v_mapping, self.v_current_col, self.v_new_col, self.v_sheet = tk.StringVar(), sv("current_col"), sv("new_col"), sv("sheet")
         self.v_match_on = tk.StringVar(value=s.get("match_on") or "patientid")
@@ -339,6 +341,8 @@ class App(tk.Tk):
         line = f"Output: {out}"
         if src:
             line += f"   ·   scans: {src}"
+        if self.v_confidential.get().strip():
+            line += f"\nConfidential folder: {self.v_confidential.get().strip()}"
         line += f"\n{len(done)} patients done" + (f", {len(partial)} half-finished" if partial else "") + \
                 ("   ·   checked: PASS" if status == "PASS" else "   ·   checked: FAIL" if status == "FAIL" else "   ·   not yet checked")
         self.v_home_recent.set(line)
@@ -417,11 +421,14 @@ class App(tk.Tk):
         # ---- step 2: output
         s2 = self.steps[1]
         ttk.Label(s2, text=STEP_TITLES[1], style="Title.TLabel").grid(row=0, column=0, columnspan=4, sticky="w", pady=(0, 10))
-        self._row(s2, 1, "Output folder", self.v_output, "dir", "One folder per patient plus _logs and _review will be created here.")
+        self._row(s2, 1, "Output folder", self.v_output, "dir", "One folder per patient plus _logs and _review will be created here. Only anonymised files and non-confidential logs ever go here.")
         ttk.Button(s2, text="Open", command=lambda: self._open(self._out())).grid(row=1, column=4, padx=(8, 0))
         ttk.Label(s2, textvariable=self.v_out_status, style="Muted.TLabel").grid(row=2, column=0, columnspan=5, sticky="w")
+        self._row(s2, 3, "Confidential folder", self.v_confidential, "dir", "Where the linkage log (study ID -> patient), the UID salt and the run logs go. Must be outside the output folder; ideally a different, encrypted drive. Nothing in the output folder can then re-identify a patient.")
+        ttk.Button(s2, text="Suggest", command=lambda: self.v_confidential.set(model.suggest_confidential(self.v_output.get()))).grid(row=3, column=4, padx=(8, 0))
+        ttk.Label(s2, text="The output folder can be handed over; the confidential folder never leaves you.", style="Muted.TLabel").grid(row=4, column=0, columnspan=5, sticky="w")
         self.lbl_drive = ttk.Label(s2, textvariable=self.v_drive_note, style="Warn.TLabel", wraplength=860, justify="left")
-        self.lbl_drive.grid(row=3, column=0, columnspan=5, sticky="w", pady=(8, 0))
+        self.lbl_drive.grid(row=5, column=0, columnspan=5, sticky="w", pady=(8, 0))
 
         # ---- step 3: review and go
         s3 = self.steps[2]
@@ -672,7 +679,7 @@ class App(tk.Tk):
         self.empty_share = self._empty(c, "Nothing to share yet.\nAnonymise some patients first.", "Go to Anonymise", lambda: self._goto_step(2))
         row = ttk.Frame(t)
         row.pack(fill="x", pady=8)
-        self.b_handover = ttk.Button(row, text="Hand over: open the output folder", style=theme.style_or("Accent.TButton"), command=lambda: self._open(self._out()))
+        self.b_handover = ttk.Button(row, text="Hand over: re-check and open the output folder", style=theme.style_or("Accent.TButton"), command=self._handover)
         self.b_handover.pack(side="left", ipady=4)
         self.b_share_check = ttk.Button(row, text="Check now", command=self._start_verify)
         self.b_share_check.pack(side="left", padx=(8, 0))
@@ -741,11 +748,11 @@ class App(tk.Tk):
                        current_col=self.v_current_col.get(), new_col=self.v_new_col.get(), sheet=self.v_sheet.get(),
                        match_on=self.v_match_on.get(), series_pick=self.v_series_pick.get(), ctca_only=self.v_ctca.get(),
                        resume=self.v_resume.get(), keep_technical=self.v_keep_tech.get(), flat=self.v_flat.get(), dry_run=dry_run,
-                       profile=self.v_profile.get())
+                       profile=self.v_profile.get(), confidential=self.v_confidential.get())
 
     def _spec_key(self) -> tuple:
         s = self._spec()
-        return (s.mode, s.manifest, s.input, s.study_id, s.mapping, s.output, s.profile, s.ctca_only, s.series_pick, s.match_on, s.current_col, s.new_col)
+        return (s.mode, s.manifest, s.input, s.study_id, s.mapping, s.output, s.confidential, s.profile, s.ctca_only, s.series_pick, s.match_on, s.current_col, s.new_col)
 
     def _save_settings(self) -> None:
         model.spec_to_settings(self._spec(), self.settings)
@@ -797,7 +804,7 @@ class App(tk.Tk):
     def _watch_form(self) -> None:
         for v in (self.v_mode, self.v_output, self.v_manifest, self.v_remap, self.v_input, self.v_study_id, self.v_mapping,
                   self.v_current_col, self.v_new_col, self.v_sheet, self.v_match_on, self.v_series_pick, self.v_profile,
-                  self.v_ctca, self.v_resume, self.v_keep_tech, self.v_flat):
+                  self.v_ctca, self.v_resume, self.v_keep_tech, self.v_flat, self.v_confidential):
             v.trace_add("write", lambda *_: self._schedule_validate())
         self._live_validate()
 
@@ -811,8 +818,8 @@ class App(tk.Tk):
         if not hasattr(self, "b_next"):
             return
         problems = self._spec().validate()
-        step1 = [p for p in problems if "output" not in p.lower() and "profile" not in p.lower()]
-        step2 = [p for p in problems if "output" in p.lower()]
+        step1 = [p for p in problems if "output" not in p.lower() and "profile" not in p.lower() and "confidential" not in p.lower()]
+        step2 = [p for p in problems if "output" in p.lower() or "confidential" in p.lower()]
         running = bool(self.proc and self.proc.running)
         ok_here = {0: not step1, 1: not step2, 2: not problems}[self.step]
         self.b_next.state(["!disabled"] if ok_here and self.step < 2 else ["disabled"])
@@ -850,7 +857,7 @@ class App(tk.Tk):
             text += " Only the coronary series will be kept."
         if s.mode == "manifest" and s.resume:
             text += " Patients already done will be skipped."
-        text += " Nothing on the original drive will change."
+        text += f" The linkage log and salt go to {s.confidential}, never into the output. Nothing on the original drive will change."
         return text
 
     def _drive_note(self) -> str:
@@ -963,8 +970,15 @@ class App(tk.Tk):
         if not out or not out.is_dir():
             messagebox.showerror(APP_NAME, "Choose an existing output folder first.")
             return
-        args = ["verify", *model.verify_args(str(out), model.split_needles(self.v_needles.get()), self.v_keep_tech.get(), self.v_profile.get())]
+        args = ["verify", *model.verify_args(str(out), model.split_needles(self.v_needles.get()), self.v_keep_tech.get(), self.v_profile.get(), self.v_confidential.get())]
         self._start_job("verify", args, "verify", "Output check")
+
+    def _handover(self) -> None:
+        """Re-hash every output file against the manifest written at verification; only an unchanged tree is opened."""
+        out = self._out()
+        if not out or not out.is_dir():
+            return
+        self._start_job("recheck", ["verify", *model.recheck_args(str(out))], "recheck", "Hand-over re-check")
 
     def _start_thick(self, fix: bool) -> None:
         out = self._out()
@@ -992,7 +1006,7 @@ class App(tk.Tk):
         secs = self.proc.elapsed()
         took = f"{secs / 60:.1f} min" if secs >= 90 else f"{secs:.0f} s"
         job, self.job = self.job, None
-        titles = {"run": "Anonymisation", "dry": "Preview", "verify": "Output check", "thick": "Thickness audit"}
+        titles = {"run": "Anonymisation", "dry": "Preview", "verify": "Output check", "thick": "Thickness audit", "recheck": "Hand-over re-check"}
         title = titles.get(job or "", "Job")
         log_text = self.log.get("1.0", "end")
         stopped = log_text.rstrip().endswith("stopped by user **")
@@ -1015,6 +1029,14 @@ class App(tk.Tk):
         if self.skipped_hidden and not self.v_show_all.get():
             self._append_log(f"({self.skipped_hidden} lines for patients skipped as already done are hidden; More > Show to see them)", "plain")
         # chaining: automatic check after a run, and the demo's three stages
+        if job == "recheck":
+            self.nb.select(self.tab_share)
+            if rc == 0:
+                self._show_card("Ready to hand over", "Every output file is byte-for-byte as it was when verified. The attestation and checksum manifest in _logs travel with it.",
+                                "Open output folder", lambda: self._open(self._out()))
+            else:
+                self._show_card("Do not hand over", "Files changed, went missing or were added since verification. Run the check again, then hand over.",
+                                "Check now", self._start_verify)
         if job == "run" and rc == 0 and self.v_verify_after.get():
             self.after(400, self._start_verify)
         elif job == "verify" and self.demo_stage != "verify":
@@ -1171,9 +1193,16 @@ class App(tk.Tk):
             s += f"   ·   in the list: {n}"
         self.v_out_status.set(s)
 
+    def _conf(self) -> Path | None:
+        s = self.v_confidential.get().strip()
+        return Path(s).expanduser() if s else None
+
     def _refresh_series(self) -> None:
-        logs = self._logs()
-        self.series_rows = model.load_series_rows(logs) if logs and logs.is_dir() else []
+        rows: list[dict] = []
+        for d in (self._conf(), self._logs()):
+            if d and d.is_dir():
+                rows += model.load_series_rows(d)
+        self.series_rows = rows
         rows = model.filter_series(self.series_rows, self.v_series_filter.get(), self.v_series_query.get())
         tv = self.tv_series
         tv.delete(*tv.get_children(""))
@@ -1218,7 +1247,7 @@ class App(tk.Tk):
         out, logs = self._out(), self._logs()
         tv = self.tv_checks
         tv.delete(*tv.get_children(""))
-        checks = model.share_readiness(out) if out else []
+        checks = model.share_readiness(out, self.v_confidential.get()) if out else []
         has_output = bool(out and out.is_dir())
         for c in checks:
             tv.insert("", "end", values=[LEVEL_MARK.get(c.level, ""), c.title, c.detail], tags=(c.level,))
@@ -1263,7 +1292,8 @@ class App(tk.Tk):
             return
         if self._busy():
             return
-        dest = filedialog.askdirectory(title="Choose a folder OUTSIDE the output tree for the confidential logs", mustexist=True)
+        dest = filedialog.askdirectory(title="Choose a folder OUTSIDE the output tree for the confidential logs", mustexist=True,
+                                       initialdir=self.v_confidential.get().strip() or str(Path.home()))
         if not dest:
             return
         try:
@@ -1298,6 +1328,7 @@ class App(tk.Tk):
         self.v_mode.set("manifest")
         self.v_manifest.set(str(m))
         self.v_output.set(str(base / "anonymised"))
+        self.v_confidential.set(str(base / "confidential"))
         self.v_remap.set("")
         self.v_series_pick.set("")
         self.v_profile.set("")
@@ -1320,6 +1351,15 @@ class App(tk.Tk):
             self.proc.stop()
         self._save_settings()
         self.destroy()
+
+    def _on_exception(self, exc_type, exc, tb) -> None:
+        path = model.record_error(exc_type, exc, tb)
+        try:
+            self._show_card("Something went wrong", f"{exc_type.__name__}: {model.redact_paths(str(exc))[:200]}\nDetails (with folder names removed) were saved to {path.name if path else 'the error log'}.",
+                            "Open error log", lambda: self._open(path))
+            self.nb.select(self.tab_run)
+        except Exception:
+            pass
 
     def _selftest_walk(self) -> None:
         for tab in (self.tab_home, self.tab_run, self.tab_series, self.tab_verify, self.tab_share, self.tab_help):

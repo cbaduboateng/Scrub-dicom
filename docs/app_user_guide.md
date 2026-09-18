@@ -68,7 +68,11 @@ detail of a field. Rarely needed ways and options sit behind **More ways and opt
 | **One patient** | A single case. Type the new ID. |
 | **A folder of patients + an ID spreadsheet** | One folder with a sub-folder per patient and a CSV or Excel sheet with an old-ID column and a new-ID column. Say whether the old ID is the Patient ID inside the scans or the sub-folder name. |
 
-**Step 2: where the anonymised copies go.** A different drive from the scans, or at least a
+**Step 2: where the anonymised copies go, and where the confidential material goes.** Two folders. The
+**output folder** receives only anonymised files and non-confidential logs and can be handed over. The
+**confidential folder** receives the linkage log (study ID to patient), the UID salt and the run logs; it
+must be outside the output folder (**Suggest** proposes a sibling folder) and it never leaves you. Ideally
+put it on a different, encrypted drive. A different drive from the scans, or at least a
 folder outside them. It will contain one folder per patient, named by new ID, plus `_logs` and
 `_review`.
 
@@ -164,7 +168,9 @@ the run logs all record the original folder paths, and folders are usually named
 number.
 
 - **Hand over** is disabled until the check has passed and no linking file is inside the output folder;
-  the reasons are listed. **Is the output folder safe to hand over?** lists what still stands between the
+  the reasons are listed. When you press it, every output file is re-hashed against the manifest written at
+  verification, and only an unchanged tree is opened. The checksum manifest and the attestation in `_logs`
+  travel with the output. **Is the output folder safe to hand over?** lists what still stands between the
   output folder and a reader: check status, half-finished patients, quarantined files in `_review`, linking or other
   confidential logs still inside the tree.
 - **Move the patient-linking logs out** moves everything except `uid_salt.txt` (needed so a re-run

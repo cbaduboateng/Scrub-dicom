@@ -824,7 +824,12 @@ class ViewerWindow(tk.Toplevel):
     def _picks_path(self, create: bool) -> Path | None:
         if self.spec.mode != "manifest" or not self.spec.manifest.strip():
             return None
-        p = Path(self.spec.series_pick) if self.spec.series_pick.strip() else pv.default_picks_path(self.spec.manifest)
+        if self.spec.series_pick.strip():
+            p = Path(self.spec.series_pick)
+        elif self.spec.confidential.strip():
+            p = Path(self.spec.confidential).expanduser() / "series_picks.csv"
+        else:
+            p = pv.default_picks_path(self.spec.manifest)
         if create and not self.spec.series_pick.strip():
             self.app.v_series_pick.set(str(p))
             self.spec.series_pick = str(p)

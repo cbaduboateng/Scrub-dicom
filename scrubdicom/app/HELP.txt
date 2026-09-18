@@ -45,8 +45,9 @@ TAB 1  ANONYMISE
                                    run on Windows: /Volumes/Drive=E:\  rewrites every folder that starts with
                                    /Volumes/Drive.
 
-  Step 2: where the anonymised copies go. Use a different drive from the scans, or at least a folder outside
-  them. It will contain one folder per patient (named by new ID), plus _logs and _review.
+  Step 2: two folders. The OUTPUT folder gets only anonymised files and can be handed over. The CONFIDENTIAL
+  folder gets the linkage log (study ID -> patient), the UID salt and the run logs; it must be outside the output
+  folder (Suggest proposes one) and never leaves you. Ideally a different, encrypted drive.
 
   Step 3: review and go. The profile, the switches, a plain-English summary of what is about to happen, and the buttons.
   Options:
@@ -110,7 +111,9 @@ TAB 3  VERIFY OUTPUT
 
 TAB 4  SHARE SAFELY
   "Hand over" is disabled until the check has passed and no linking file is inside the output folder; the reasons
-  are listed. Fix them with "Check now" and "Move confidential logs out".
+  are listed. Pressing it re-hashes every output file against the manifest written at verification and opens the
+  folder only if nothing changed. The manifest and the attestation (what was verified, by which version, with
+  which profile) travel with the output. Fix them with "Check now" and "Move confidential logs out".
   The whole _logs folder is confidential, not just the LINKAGE file: the per-file and per-patient CSVs and
   the run logs record the original folder paths, and folders are usually named by hospital number.
   "Move the patient-linking logs out" moves everything except uid_salt.txt (needed so a re-run produces the

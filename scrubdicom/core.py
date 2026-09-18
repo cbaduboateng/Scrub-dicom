@@ -55,7 +55,7 @@ except ImportError:
 
 from scrubdicom.profiles import Profile, load_profile, shift_days_for, shift_da, shift_dt, age_years, age_bucket_5y
 
-VERSION = "0.5.0"
+VERSION = "0.6.0"
 DUMMY_DATE = "19000101"
 DUMMY_TIME = "111111.111111"
 DUMMY_DATETIME = "19000101111111.111111"
@@ -118,7 +118,9 @@ REVIEW_SOP_CLASSES = {
     "1.2.840.10008.5.1.4.1.1.104.1",    # Encapsulated PDF
     "1.2.840.10008.5.1.4.1.1.11.1",     # Grayscale Softcopy Presentation State
 }
-REVIEW_MODALITIES = {"SR", "PR", "KO", "DOC", "OT"}
+# Modalities whose images routinely carry burned-in text (ultrasound, angiography, radiographs, photographs) are
+# quarantined for a human look, alongside reports, presentation states and "other".
+REVIEW_MODALITIES = {"SR", "PR", "KO", "DOC", "OT", "US", "XA", "RF", "MG", "DX", "CR", "XC", "ES", "PX"}
 
 # Technical fields whose vocabulary names the vendor (B26f, WEDGE_2, PULS_EC, CT_SOM5...). Cleared by
 # default because a reader who recognises the scanner can guess the centre; --keep-technical retains them.
@@ -568,6 +570,46 @@ def volume_present(out: Path) -> bool:
     return out.exists()
 
 
+def confidential_dir(a: argparse.Namespace, out: Path) -> tuple[Path, bool]:
+    """Where the linkage log, the UID salt and the run logs go: --confidential if given (must be outside the output
+    tree), else <output>/_logs with a warning. Returns (folder, explicit)."""
+    c = getattr(a, "confidential", None)
+    if c:
+        conf = win_path(Path(c).resolve())
+        if conf == out or out in conf.parents or conf in out.parents:
+            sys.exit(f"--confidential must be a folder outside the output tree: {conf}")
+        return conf, True
+    return out / "_logs", False
+
+
+def read_or_make_salt(conf: Path, out: Path, given: str | None, dry_run: bool) -> str:
+    """The UID salt lives with the confidential material. Older outputs kept it in <output>/_logs; that is still read
+    so re-runs of an existing output keep their UIDs."""
+    for cand in (conf / "uid_salt.txt", out / "_logs" / "uid_salt.txt"):
+        try:
+            if cand.exists():
+                return cand.read_text().strip()
+        except OSError:
+            pass
+    salt = given or hashlib.sha256(os.urandom(32)).hexdigest()
+    if not dry_run:
+        conf.mkdir(parents=True, exist_ok=True)
+        (conf / "uid_salt.txt").write_text(salt)
+    return salt
+
+
+def review_note(ds: Dataset, reason: str, a: argparse.Namespace) -> str:
+    """Quarantine reason, plus what optional OCR could read in the pixels (Tesseract, if installed)."""
+    if getattr(a, "no_ocr", False):
+        return reason
+    try:
+        from scrubdicom import ocr
+        words = ocr.words_in_dataset(ds)
+    except Exception:
+        words = ""
+    return f"{reason}; possible burned-in text: {words}" if words else reason
+
+
 def cmd_run(a: argparse.Namespace) -> int:
     if a.manifest:
         return run_manifest(a)
@@ -579,14 +621,21 @@ def cmd_run(a: argparse.Namespace) -> int:
         sys.exit(f"Input folder not found: {inp}")
     if out == inp or inp in out.parents:
         log(f"Note: output {out} is inside input; it will be skipped while scanning.")
+    conf, explicit = confidential_dir(a, out)
     if not a.dry_run:
         out.mkdir(parents=True, exist_ok=True)
         (out / "_logs").mkdir(exist_ok=True)
+        conf.mkdir(parents=True, exist_ok=True)
     logs = out / "_logs"
+    if not explicit:
+        log("Note: the linkage log, salt and run logs will be written inside the output tree (_logs). Pass --confidential FOLDER to keep them elsewhere.")
+    else:
+        log(f"Confidential material (linkage, salt, run logs) goes to {conf}")
 
     profile = load_profile(getattr(a, "profile", None))
     if not a.dry_run:
-        (logs / "profile.json").write_text(json.dumps(profile.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+        for d in {logs, conf}:
+            (d / "profile.json").write_text(json.dumps(profile.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
     log(f"Profile: {profile.name}. {profile.describe()}")
     mapping: dict[str, str] = {}
     if a.study_id:
@@ -596,14 +645,7 @@ def cmd_run(a: argparse.Namespace) -> int:
     else:
         sys.exit("Give either --study-id (single patient folder) or --mapping (many patients)")
 
-    # UID salt persists in the output tree so re-runs produce identical UIDs.
-    salt_file = out / "_logs" / "uid_salt.txt"
-    if salt_file.exists():
-        salt = salt_file.read_text().strip()
-    else:
-        salt = a.salt or hashlib.sha256(os.urandom(32)).hexdigest()
-        if not a.dry_run:
-            salt_file.write_text(salt)
+    salt = read_or_make_salt(conf, out, a.salt, a.dry_run)
 
     run_ts = time.strftime("%Y%m%d_%H%M%S")
     per_study = defaultdict(lambda: {"files": 0, "series": set(), "review": 0, "errors": 0,
@@ -646,6 +688,8 @@ def cmd_run(a: argparse.Namespace) -> int:
         rec["orig_manufacturer"].add(f"{ds.get('Manufacturer', '')} {ds.get('ManufacturerModelName', '')}".strip())
 
         reason = is_review_object(ds)
+        if reason:
+            reason = review_note(ds, reason, a)
         series_no = str(ds.get("SeriesNumber", "0"))
         inst_no = str(ds.get("InstanceNumber", ""))
         try:
@@ -700,13 +744,13 @@ def cmd_run(a: argparse.Namespace) -> int:
             log(f"  {skipped_nondicom} non-DICOM files ignored")
         return 0
 
-    with open(logs / f"files_{run_ts}.csv", "w", newline="") as fh:
+    with open(conf / f"files_{run_ts}.csv", "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["study_id", "source_path", "output_path", "status", "note"])
         w.writerows(file_rows)
 
     # The linkage log is the ONLY place original identifiers survive. Keep it away from the anonymised scans.
-    link_path = Path(a.linkage_log) if a.linkage_log else logs / f"LINKAGE_{run_ts}_CONFIDENTIAL.csv"
+    link_path = Path(a.linkage_log) if a.linkage_log else conf / f"LINKAGE_{run_ts}_CONFIDENTIAL.csv"
     with open(link_path, "w", newline="") as fh:
         w = csv.writer(fh)
         w.writerow(["study_id", "source_key", "original_patient_id", "original_name", "original_study_date",
@@ -720,7 +764,7 @@ def cmd_run(a: argparse.Namespace) -> int:
                         r["files"], len(r["series"]), r["review"], r["errors"]])
 
     if unmapped or missing:
-        with open(logs / f"unmapped_{run_ts}.csv", "w", newline="") as fh:
+        with open(conf / f"unmapped_{run_ts}.csv", "w", newline="") as fh:
             w = csv.writer(fh)
             w.writerow(["source_key", "files_skipped", "note"])
             w.writerows([k, n, "scans on disk but no mapping row"] for k, n in sorted(unmapped.items()))
@@ -734,10 +778,10 @@ def cmd_run(a: argparse.Namespace) -> int:
             + (f", {r['review']} sent to _review" if r["review"] else "")
             + (f", {r['errors']} ERRORS" if r["errors"] else ""))
     if unmapped:
-        log(f"  UNMAPPED (skipped, not copied): {dict(unmapped)}  -> see _logs/unmapped_{run_ts}.csv")
+        log(f"  UNMAPPED (skipped, not copied): {dict(unmapped)}  -> see {conf / f'unmapped_{run_ts}.csv'}")
     if missing:
         log(f"  Mapping rows with no scans found on disk ({len(missing)}): {', '.join(missing[:20])}"
-            f"{' ...' if len(missing) > 20 else ''}  -> see _logs/unmapped_{run_ts}.csv")
+            f"{' ...' if len(missing) > 20 else ''}  -> see {conf / f'unmapped_{run_ts}.csv'}")
     if skipped_nondicom:
         log(f"  {skipped_nondicom} non-DICOM files ignored")
     log(f"  Linkage log (confidential, move it out of the output tree): {link_path}")
@@ -765,23 +809,24 @@ def run_manifest(a: argparse.Namespace) -> int:
     pairs = load_manifest(a.manifest, getattr(a, "remap", None))
     load_skip_files(a.manifest)
     out = win_path(Path(a.output).resolve())
+    conf, explicit = confidential_dir(a, out)
     keep_awake()
     if not a.dry_run:
         (out / "_logs").mkdir(parents=True, exist_ok=True)
-    salt_file = out / "_logs" / "uid_salt.txt"
-    if salt_file.exists():
-        salt = salt_file.read_text().strip()
+        conf.mkdir(parents=True, exist_ok=True)
+    if not explicit:
+        log("Note: the linkage log, salt and run logs will be written inside the output tree (_logs). Pass --confidential FOLDER to keep them elsewhere.")
     else:
-        salt = a.salt or hashlib.sha256(os.urandom(32)).hexdigest()
-        if not a.dry_run:
-            salt_file.write_text(salt)
+        log(f"Confidential material (linkage, salt, run logs) goes to {conf}")
+    salt = read_or_make_salt(conf, out, a.salt, a.dry_run)
     run_ts = time.strftime("%Y%m%d_%H%M%S")
     profile = load_profile(getattr(a, "profile", None))
     if not a.dry_run:
-        (out / "_logs" / "profile.json").write_text(json.dumps(profile.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+        for d in {out / "_logs", conf}:
+            (d / "profile.json").write_text(json.dumps(profile.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
     log(f"Profile: {profile.name}. {profile.describe()}")
     summary, link_rows, file_rows, missing, series_rows, no_ctca, check_studies = [], [], [], [], [], [], []
-    series_log = out / "_logs" / f"series_{run_ts}.csv"
+    series_log = conf / f"series_{run_ts}.csv"
     picks = load_series_picks(a.series_pick) if a.series_pick else {}
     pick_stats = {"uid": 0, "desc": 0, "unmatched": 0}
     unmatched_picks = []
@@ -936,6 +981,8 @@ def run_manifest(a: argparse.Namespace) -> int:
             rec["orig_series_desc"].add(f"{ds.get('SeriesNumber', '')}: {ds.get('SeriesDescription', '')}")
             rec["orig_manufacturer"].add(f"{ds.get('Manufacturer', '')} {ds.get('ManufacturerModelName', '')}".strip())
             reason = is_review_object(ds)
+            if reason:
+                reason = review_note(ds, reason, a)
             series_no = str(ds.get("SeriesNumber", "0") or "0")
             inst_no = str(ds.get("InstanceNumber", "") or "")
             try:
@@ -1011,7 +1058,7 @@ def run_manifest(a: argparse.Namespace) -> int:
     if a.dry_run:
         log(f"\nDRY RUN: {len(summary)} studies would be written; {len(missing)} folders not found")
         return 0
-    logs = out / "_logs"
+    logs = conf
     link_path = Path(a.linkage_log) if a.linkage_log else logs / f"LINKAGE_{run_ts}_CONFIDENTIAL.csv"
     if drive_lost or not volume_present(out):
         log(f"** Drive gone: the per-run CSV logs for this attempt could not be written. Completed studies are marked on disk; "
@@ -1069,8 +1116,124 @@ PN_KEYWORDS = ("PatientName", "ReferringPhysicianName", "PhysiciansOfRecord", "P
                "OperatorsName", "RequestingPhysician", "NameOfPhysiciansReadingStudy")
 
 
+NHS_RE = re.compile(r"(?<![\dA-Z])(\d{3})[ -]?(\d{3})[ -]?(\d{4})(?![\dA-Z])")
+POSTCODE_RE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]? \d[A-Z]{2}\b")
+DATE_RE = re.compile(r"(?<!\d)(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)")
+FILEMETA_FORBIDDEN = ("SourceApplicationEntityTitle", "SendingApplicationEntityTitle", "ReceivingApplicationEntityTitle",
+                      "PrivateInformationCreatorUID", "PrivateInformation")
+
+
+def nhs_number_valid(digits: str) -> bool:
+    """Modulus-11 check digit: only a valid NHS number is flagged, so random ten-digit runs do not raise false alarms."""
+    if len(digits) != 10 or not digits.isdigit():
+        return False
+    total = sum(int(d) * w for d, w in zip(digits[:9], range(10, 1, -1)))
+    check = 11 - total % 11
+    if check == 11:
+        check = 0
+    return check != 10 and check == int(digits[9])
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def output_files(out: Path):
+    """Every file in the study folders (not _logs / _review / dotfiles), in a stable order."""
+    for dirpath, dirnames, filenames in os.walk(out):
+        d = Path(dirpath)
+        dirnames[:] = sorted(x for x in dirnames if not x.startswith(("_", ".")))
+        for fn in sorted(filenames):
+            if not fn.startswith(".") and d != out:
+                yield d / fn
+
+
+def write_checksums(out: Path, ts: str) -> tuple[Path, int, str]:
+    """SHA-256 of every output file, written to <out>/_logs/checksums_<ts>.sha256. Returns (path, count, digest of the manifest)."""
+    lines = [f"{sha256_file(p)}  {p.relative_to(out).as_posix()}" for p in output_files(out)]
+    man = out / "_logs" / f"checksums_{ts}.sha256"
+    man.parent.mkdir(exist_ok=True)
+    man.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    return man, len(lines), hashlib.sha256(man.read_bytes()).hexdigest()
+
+
+def latest_checksums(out: Path) -> Path | None:
+    files = sorted((out / "_logs").glob("checksums_*.sha256"))
+    return files[-1] if files else None
+
+
+def recheck_checksums(out: Path) -> tuple[bool, list[str], list[str], list[str], Path | None]:
+    """Compare the output files with the newest manifest: (ok, changed, missing, added, manifest)."""
+    man = latest_checksums(out)
+    if not man:
+        return False, [], [], [], None
+    expected: dict[str, str] = {}
+    for line in man.read_text(encoding="utf-8").splitlines():
+        if "  " in line:
+            digest, rel = line.split("  ", 1)
+            expected[rel] = digest
+    seen: set[str] = set()
+    changed: list[str] = []
+    for p in output_files(out):
+        rel = p.relative_to(out).as_posix()
+        seen.add(rel)
+        if rel in expected and sha256_file(p) != expected[rel]:
+            changed.append(rel)
+    missing = sorted(set(expected) - seen)
+    added = sorted(seen - set(expected))
+    return not (changed or missing or added), changed, missing, added, man
+
+
+def write_attestation(out: Path, ts: str, profile: Profile, checked: int, needles: int, man: Path | None, man_digest: str, n_files: int) -> Path:
+    """A machine-readable statement of what was verified, for the reader or the data protection officer. Unsigned:
+    sign the release (Developer ID / Authenticode) to make the tool's identity verifiable, and keep this file with
+    the output."""
+    import platform as _platform
+    studies = sorted(p.name for p in out.iterdir() if p.is_dir() and not p.name.startswith(("_", ".")))
+    done = [s for s in studies if any((out / s).glob(".complete*"))]
+    att = {
+        "tool": "Scrub-DICOM", "version": VERSION, "verified_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "platform": f"{_platform.system()} {_platform.release()} {_platform.machine()}",
+        "profile": {"name": profile.name, "retains": profile.kept_summary(), "method": profile.method_string(VERSION)},
+        "output": {"patients": len(studies), "patients_marked_complete": len(done), "files_verified": checked, "files_hashed": n_files},
+        "verify": {"result": "PASS", "needles_used": needles},
+        "checksums": {"file": man.name if man else None, "sha256": man_digest or None},
+        "statement": "Every file listed in the checksum manifest was re-read and found free of private tags, original UIDs, "
+                     "real dates (unless the profile shifts them), person names, institution and device identity beyond "
+                     "what the profile retains, and of every needle supplied. Pixel data was not inspected.",
+    }
+    path = out / "_logs" / f"attestation_{ts}.json"
+    path.write_text(json.dumps(att, indent=2), encoding="utf-8")
+    return path
+
+
 def cmd_verify(a: argparse.Namespace) -> int:
     out = Path(a.output).resolve()
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    conf = win_path(Path(a.confidential).resolve()) if getattr(a, "confidential", None) else None
+
+    if getattr(a, "recheck", False):
+        ok, changed, missing, added, man = recheck_checksums(out)
+        lines = [f"Re-check of {out} against {man.name if man else 'no manifest'}", ""]
+        if not man:
+            lines.append("FAIL: no checksum manifest found; run verify first.")
+        elif ok:
+            lines.append("PASS: every output file is byte-for-byte as it was when verified; nothing added or missing.")
+        else:
+            lines.append(f"FAIL: {len(changed)} changed, {len(missing)} missing, {len(added)} added since verification")
+            for label, items in (("changed", changed), ("missing", missing), ("added", added)):
+                for x in items[:a.max_examples]:
+                    lines.append(f"  [{label}] {x}")
+        report = out / "_logs" / f"recheck_{ts}.txt"
+        report.parent.mkdir(exist_ok=True)
+        report.write_text("\n".join(lines))
+        log("\n".join(lines))
+        return 0 if ok else 1
+
     prof_path = getattr(a, "profile", None) or ((out / "_logs" / "profile.json") if (out / "_logs" / "profile.json").exists() else None)
     profile = load_profile(prof_path)
     keep_technical = a.keep_technical or profile.keep_technical
@@ -1083,19 +1246,26 @@ def cmd_verify(a: argparse.Namespace) -> int:
     if prof_path:
         log(f"Verifying against profile: {profile.name}. {profile.describe()}")
     needles: set[str] = set()
+    name_words: set[str] = set()     # surname / forename parts: matched as whole words only ("MARY" must not hit "PRIMARY")
     if a.mapping:
         needles |= {k for k in load_mapping(a.mapping, a.current_col, a.new_col, a.sheet).keys() if len(k) >= 4}
     for n in a.needle or []:
         needles.add(n.upper())
     # Read the linkage log(s) too: original IDs/names in there are exactly what must not appear in scans.
-    for lp in (out / "_logs").glob("LINKAGE_*.csv"):
-        with open(lp, newline="") as fh:
-            for r in csv.DictReader(fh):
-                for col in ("original_patient_id", "original_name", "original_study_date", "original_dob"):
-                    for v in (r.get(col) or "").split(";"):
-                        v = v.strip().upper()
-                        if len(v) >= 4 and v not in ("19000101", "00010101"):
-                            needles.add(v)
+    link_dirs = [out / "_logs"] + ([conf] if conf else [])
+    for d in link_dirs:
+        for lp in d.glob("LINKAGE_*.csv"):
+            with open(lp, newline="") as fh:
+                for r in csv.DictReader(fh):
+                    for col in ("original_patient_id", "original_name", "original_study_date", "original_dob"):
+                        for v in (r.get(col) or "").split(";"):
+                            v = v.strip().upper()
+                            if len(v) >= 4 and v not in ("19000101", "00010101"):
+                                needles.add(v)
+                            if col == "original_name":   # surname and forenames on their own, too
+                                for part in re.split(r"[\^\s,]+", v):
+                                    if len(part) >= 3:
+                                        name_words.add(part)
 
     problems = defaultdict(list)
     checked = 0
@@ -1114,6 +1284,25 @@ def cmd_verify(a: argparse.Namespace) -> int:
         def flag(kind, detail):
             problems[kind].append(f"{rel}: {detail}")
 
+        def text_sweep(kw: str, txt: str):
+            up = txt.upper()
+            for n in needles:
+                if n in up and kw not in ("PatientName", "PatientID"):
+                    flag("identifier text", f"{kw} contains {n}")
+                elif n in up and up != n:
+                    flag("identifier text", f"{kw}={up}")
+            if name_words and kw not in ("PatientName", "PatientID"):
+                for w in re.findall(r"[A-Z]{3,}", up):
+                    if w in name_words:
+                        flag("identifier text", f"{kw} contains the name part {w}")
+            for m in NHS_RE.finditer(txt):
+                if nhs_number_valid("".join(m.groups())):
+                    flag("NHS-number-shaped value", f"{kw}")
+            if POSTCODE_RE.search(up):
+                flag("postcode-shaped value", f"{kw}")
+            if not profile.shift_dates and kw not in ("DeidentificationMethod",) and DATE_RE.search(txt) and DUMMY_DATE not in txt:
+                flag("date-shaped text", f"{kw}")
+
         def walk(d: Dataset, depth=0):
             for e in d:
                 if e.tag.is_private:
@@ -1130,14 +1319,17 @@ def cmd_verify(a: argparse.Namespace) -> int:
                 elif e.VR == "UI" and e.keyword not in UID_KEEP and e.value and not str(e.value).startswith(("2.25.", STANDARD_UID_PREFIX)):
                     flag("original UID", f"{e.keyword}={e.value}")
                 elif e.VR in ("PN", "LO", "SH", "ST", "LT", "UT", "CS", "AE") and e.value:
-                    txt = str(e.value).upper()
-                    for n in needles:
-                        if n in txt and e.keyword not in ("PatientName", "PatientID"):
-                            flag("identifier text", f"{e.keyword} contains {n}")
-                        elif n in txt and txt != n:
-                            flag("identifier text", f"{e.keyword}={txt}")
+                    text_sweep(e.keyword or str(e.tag), str(e.value))
 
         walk(ds)
+        fm = getattr(ds, "file_meta", None)
+        if fm is not None:
+            for kw in FILEMETA_FORBIDDEN:
+                if kw in fm:
+                    flag("file meta carries PACS identity", kw)
+            for e in fm:
+                if e.tag.is_private:
+                    flag("private tag in file meta", str(e.tag))
         for kw in absent:
             if kw in ds:
                 flag("attribute should be absent", kw)
@@ -1160,10 +1352,14 @@ def cmd_verify(a: argparse.Namespace) -> int:
         if str(ds.get("PatientIdentityRemoved", "")) != "YES":
             flag("PatientIdentityRemoved not YES", "")
 
-    report = out / "_logs" / f"verify_{time.strftime('%Y%m%d_%H%M%S')}.txt"
     lines = [f"Verified {checked} files under {out}", ""]
+    man, n_hashed, man_digest = None, 0, ""
     if not problems:
-        lines.append("PASS: no residual identifiers, real dates, original UIDs or private tags found.")
+        lines.append("PASS: no residual identifiers, real dates, original UIDs, private tags or PACS identity found.")
+        if not getattr(a, "no_checksums", False):
+            man, n_hashed, man_digest = write_checksums(out, ts)
+            att = write_attestation(out, ts, profile, checked, len(needles), man, man_digest, n_hashed)
+            lines.append(f"Checksum manifest: {man.name} ({n_hashed} files). Attestation: {att.name}.")
     else:
         lines.append(f"FAIL: {sum(len(v) for v in problems.values())} findings")
         for kind, items in sorted(problems.items()):
@@ -1171,9 +1367,19 @@ def cmd_verify(a: argparse.Namespace) -> int:
             lines.extend("  " + x for x in items[:a.max_examples])
             if len(items) > a.max_examples:
                 lines.append(f"  ... and {len(items) - a.max_examples} more")
-    report.parent.mkdir(exist_ok=True)
-    report.write_text("\n".join(lines))
-    log("\n".join(lines))
+    # A PASS report carries no identifiers and stays with the output. A FAIL report quotes the offending values:
+    # with a confidential folder it goes there, and the output keeps a one-line stub.
+    (out / "_logs").mkdir(exist_ok=True)
+    full = "\n".join(lines)
+    if problems and conf:
+        conf.mkdir(parents=True, exist_ok=True)
+        report = conf / f"verify_{ts}.txt"
+        report.write_text(full)
+        (out / "_logs" / f"verify_{ts}.txt").write_text(f"{lines[0]}\n\n{lines[2]}\nDetails are in {report} (confidential).\n")
+    else:
+        report = out / "_logs" / f"verify_{ts}.txt"
+        report.write_text(full)
+    log(full)
     log(f"\nReport written to {report}")
     return 1 if problems else 0
 
@@ -1245,6 +1451,9 @@ def main(argv=None):
     r.add_argument("--linkage-log", help="where to write the confidential linkage CSV (default: <output>/_logs/)")
     r.add_argument("--salt", help="fixed UID salt (default: random, saved in <output>/_logs/uid_salt.txt for re-runs)")
     r.add_argument("--profile", help="de-identification profile JSON (see scrubdicom.profiles); default = full blind")
+    r.add_argument("--confidential", help="folder OUTSIDE the output tree for the linkage log, the UID salt and the run logs "
+                                          "(default: <output>/_logs, with a warning)")
+    r.add_argument("--no-ocr", action="store_true", help="do not run Tesseract (if installed) on quarantined objects to note burned-in text")
     r.add_argument("--dry-run", action="store_true", help="scan and report, write nothing")
     r.set_defaults(func=cmd_run)
 
@@ -1257,6 +1466,9 @@ def main(argv=None):
     v.add_argument("--needle", action="append", help="extra string that must not appear (repeatable), e.g. a surname")
     v.add_argument("--keep-technical", action="store_true", help="do not flag vendor-specific technical fields")
     v.add_argument("--profile", help="profile the output was made with (default: <output>/_logs/profile.json if present)")
+    v.add_argument("--confidential", help="the run's confidential folder: its linkage logs supply needles and a FAIL report is written there")
+    v.add_argument("--recheck", action="store_true", help="only compare the output files with the newest checksum manifest (tamper / completeness check)")
+    v.add_argument("--no-checksums", action="store_true", help="do not write a checksum manifest and attestation on PASS")
     v.add_argument("--max-examples", type=int, default=10)
     v.add_argument("--log-file", help="also append everything printed to this file")
     v.set_defaults(func=cmd_verify)

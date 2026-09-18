@@ -94,6 +94,7 @@ class JobSpec:
     flat: bool = False
     dry_run: bool = False
     profile: str = ""          # path to a profile JSON; "" = the default full-blind profile
+    confidential: str = ""     # folder outside the output tree for linkage, salt and run logs (the app requires it)
 
     def validate(self) -> list[str]:
         p: list[str] = []
@@ -126,6 +127,15 @@ class JobSpec:
                     p.append(f"Mapping file not found: {self.mapping}")
         if self.profile.strip() and not Path(self.profile).is_file():
             p.append(f"Profile file not found: {self.profile}")
+        if not self.confidential.strip():
+            p.append("Choose a confidential folder for the linkage log (outside the output folder).")
+        elif self.output.strip():
+            try:
+                c, o = Path(self.confidential).expanduser().resolve(), Path(self.output).expanduser().resolve()
+                if c == o or o in c.parents or c in o.parents:
+                    p.append("The confidential folder must be outside the output folder.")
+            except OSError:
+                pass
         if self.output.strip() and self.mode != "manifest" and self.input.strip():
             try:
                 out, inp = Path(self.output).resolve(), Path(self.input).resolve()
@@ -169,6 +179,8 @@ class JobSpec:
             a.append("--flat")
         if self.profile.strip():
             a += ["--profile", self.profile.strip()]
+        if self.confidential.strip():
+            a += ["--confidential", self.confidential.strip()]
         if self.dry_run:
             a.append("--dry-run")
         return a
@@ -177,10 +189,12 @@ class JobSpec:
         return engine_command(["run", *self.run_args()])
 
 
-def verify_args(output: str, needles: list[str], keep_technical: bool = False, profile: str = "") -> list[str]:
+def verify_args(output: str, needles: list[str], keep_technical: bool = False, profile: str = "", confidential: str = "") -> list[str]:
     a = ["--output", output.strip()]
     if profile.strip():
         a += ["--profile", profile.strip()]
+    if confidential.strip():
+        a += ["--confidential", confidential.strip()]
     for n in needles:
         n = n.strip()
         if n:
@@ -188,6 +202,16 @@ def verify_args(output: str, needles: list[str], keep_technical: bool = False, p
     if keep_technical:
         a.append("--keep-technical")
     return a
+
+
+def recheck_args(output: str) -> list[str]:
+    return ["--output", output.strip(), "--recheck"]
+
+
+def suggest_confidential(output: str) -> str:
+    """A sibling of the output folder, clearly named. Outside the output tree by construction."""
+    o = Path(output.strip()).expanduser()
+    return str(o.parent / f"{o.name}_CONFIDENTIAL") if output.strip() else ""
 
 
 def thick_args(output: str, fix: bool) -> list[str]:
@@ -376,7 +400,7 @@ def verify_status(logs: Path) -> tuple[str | None, Path | None, str]:
 
 # ---------------------------------------------------------------------------------------------- sharing
 
-LOG_KEEP = {"uid_salt.txt"}   # the only _logs file that is not confidential and is needed by re-runs
+LOG_KEEP: set[str] = set()   # since 0.6.0 the salt moves out with the linkage material (it is what makes shifted dates and UID hashes linkable)
 
 
 @dataclass
@@ -397,10 +421,14 @@ def is_pass_report(p: Path) -> bool:
         return False
 
 
+NOT_CONFIDENTIAL_PREFIXES = ("attestation_", "checksums_", "recheck_", "profile")
+
+
 def confidential_log_files(logs: Path) -> list[Path]:
     try:
         return sorted(p for p in logs.iterdir()
-                      if p.is_file() and p.name not in LOG_KEEP and not p.name.startswith(".") and not is_pass_report(p))
+                      if p.is_file() and p.name not in LOG_KEEP and not p.name.startswith(".") and not is_pass_report(p)
+                      and not p.name.startswith(NOT_CONFIDENTIAL_PREFIXES))
     except OSError:
         return []
 
@@ -431,13 +459,19 @@ def _mtime(p: Path | None) -> float:
         return 0.0
 
 
-def share_readiness(out: Path) -> list[Check]:
+def latest_attestation(logs: Path) -> Path | None:
+    return latest(logs, "attestation", (".json",))
+
+
+def share_readiness(out: Path, confidential: str = "") -> list[Check]:
     """What stands between this output tree and handing it to a reader. 'block' items must be fixed; 'warn'
     items need a decision by a human."""
     checks: list[Check] = []
     if not out.is_dir():
         return [Check("block", "Output folder does not exist", str(out))]
     logs = out / "_logs"
+    if confidential.strip():
+        checks.append(Check("ok", "Linkage, salt and run logs go to the confidential folder", confidential.strip()))
     done, partial = study_state(out)
     status, rep, _ = verify_status(logs)
     last_run = max((_mtime(latest(logs, "summary", (".csv",))), _mtime(latest(logs, "files", (".csv",))),
@@ -465,11 +499,14 @@ def share_readiness(out: Path) -> list[Check]:
         checks.append(Check("block", f"{len(link)} linkage file(s) still in the output tree", "Each links study IDs to real patients. Use 'Move confidential logs out'."))
     else:
         checks.append(Check("ok", "No linkage file in the output tree"))
+    att = latest_attestation(logs)
+    if status == "PASS" and att:
+        checks.append(Check("ok", "Attestation and checksum manifest written", att.name))
     conf = confidential_log_files(logs)
     conf_other = [p for p in conf if p not in link]
     if conf_other:
-        checks.append(Check("warn", f"{len(conf_other)} other log file(s) in _logs carry original folder paths or descriptions",
-                            "files_*, summary_*, unmapped_*, series_* and the run logs. Move the whole _logs folder out; only uid_salt.txt needs to stay."))
+        checks.append(Check("warn", f"{len(conf_other)} other log file(s) in _logs carry original folder paths, descriptions or the UID salt",
+                            "files_*, summary_*, unmapped_*, series_*, uid_salt.txt and the run logs. Move them out (to the confidential folder)."))
     return checks
 
 
@@ -482,7 +519,7 @@ def move_logs_out(out: Path, dest_parent: Path) -> tuple[list[Path], Path]:
     logs = out / "_logs"
     files = confidential_log_files(logs) + [p for p in linkage_files(out) if p.parent != logs]
     if not files:
-        raise ValueError("Nothing to move: _logs holds only uid_salt.txt.")
+        raise ValueError("Nothing to move: _logs holds no confidential files.")
     folder = dest_parent / f"{out.name}_logs_CONFIDENTIAL_{time.strftime('%Y%m%d_%H%M%S')}"
     folder.mkdir(parents=True, exist_ok=False)
     moved = []
@@ -669,6 +706,30 @@ def find_applications(extra_dirs: list[Path] | None = None) -> list[tuple[str, P
 def viewer_app_name(app_path: str) -> str:
     p = Path(app_path.strip()) if app_path.strip() else None
     return (p.stem if p else "system default viewer")
+
+
+def redact_paths(text: str) -> str:
+    """Replace anything that looks like a filesystem path, so an error log can be shared without leaking folder names."""
+    text = re.sub(r"[A-Za-z]:\\[^\s'\"]+", "<path>", text)
+    return re.sub(r"(?<![\w.])/(?:[^\s'\"/]+/)+[^\s'\"]*", "<path>", text)
+
+
+def errors_log_path() -> Path:
+    return settings_path().parent / "errors.log"
+
+
+def record_error(exc_type, exc, tb) -> Path | None:
+    """Append a path-redacted traceback to the app's error log. Never raises."""
+    import traceback
+    try:
+        text = "".join(traceback.format_exception(exc_type, exc, tb))
+        p = errors_log_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "a", encoding="utf-8") as fh:
+            fh.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')}  {APP_NAME} {APP_VERSION}\n{redact_paths(text)}")
+        return p
+    except Exception:
+        return None
 
 
 def about_text() -> str:

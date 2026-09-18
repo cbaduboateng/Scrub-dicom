@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.6.0 (2026-09-18)
+Security hardening.
+- Confidential folder: `run --confidential FOLDER` writes the linkage log, the UID salt and every run log there,
+  outside the output tree; the app requires one (step 2, with a Suggest button). Without it the engine warns.
+  The salt now travels with the linkage material (it is what makes hashed UIDs and shifted dates linkable).
+- Verify: inspects the file meta group (PACS AE titles, private information); sweeps every text field for valid
+  NHS numbers (modulus 11), UK postcodes and date-shaped strings; uses surname and forename parts from the
+  linkage log as whole-word needles; on PASS writes a SHA-256 manifest of every output file and a JSON
+  attestation (tool, version, profile, counts, statement). `verify --recheck` compares the tree with the manifest
+  and fails on any changed, missing or added file. A FAIL report goes to the confidential folder with a one-line
+  stub in the output.
+- App: "Hand over" re-checks the checksums first and only then opens the folder. Unhandled errors are written to
+  a path-redacted error log and shown as a recovery card.
+- Modalities that routinely carry burned-in text (US, XA, RF, MG, DX, CR, XC, ES, PX) are quarantined for a human
+  look. Optional OCR: if Tesseract is installed, quarantined objects get a "possible burned-in text" note.
+  A synthetic ultrasound frame joined the fixtures.
+- Supply chain: dependencies install only by SHA-256 hash (`packaging/requirements-build.lock`), `pip-audit` runs
+  before every build, a software bill of materials is written next to the DMG, and a GitHub Actions workflow
+  runs the suite on macOS and Windows with `pip-audit` on every push.
+- The Streamlit dashboard is removed; a test fails if any web-server module is referenced in the package.
+
 ## 0.5.0 (2026-09-18)
 Idiot-proofing pass, as prepared for a conference demo.
 - Guided three-step flow on the Anonymise tab (Where are the scans? / Where should the copies go? / Review and go)
