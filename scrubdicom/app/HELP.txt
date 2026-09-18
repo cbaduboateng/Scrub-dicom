@@ -1,0 +1,69 @@
+SCRUB-DICOM: HOW TO USE THIS APP
+
+What it does
+  Takes a folder (or many folders) of cardiac CT exports and writes a separate, pseudonymised copy in which
+  nothing in the header identifies the patient, the hospital or the scanner. The original scans are never
+  modified. Every output file is checked by "Verify" before you share anything.
+
+  This app never connects to the internet. It starts the same engine the command line uses, as a
+  separate process, and shows you its output.
+
+Before you start
+  1. Put the original exports on a drive you can leave connected for hours.
+  2. Choose an OUTPUT folder on a different drive or at least outside the input folders. It will hold one
+     folder per study ID plus _logs and _review.
+  3. Decide how studies get their IDs (the "Input" section on the Run tab):
+       Cohort manifest        a CSV with two columns, source_folder and study_id, one patient folder per row.
+                              Best for a cohort scattered across drives and hospitals. Supports Resume and
+                              "coronary series only".
+       One patient folder     one folder, one study ID typed in.
+       Folder + mapping file  one folder holding many patient sub-folders and a CSV/XLSX mapping the current
+                              ID (hospital number or folder name) to the new study ID.
+
+Running
+  Dry run     scans and reports what would be written; writes nothing. Do this first.
+  Start run   shows the exact command, then runs it. The log updates live; the bar shows study n of N.
+  Stop        ends the run. The study in progress is left without a completion marker and is redone on the
+              next run with Resume ticked. Nothing is corrupted.
+  Options
+    Keep only the coronary CTA series   drops localisers, calcium score, chest recons, lung/sharp kernels,
+                                        MPRs and dose reports. Every decision is logged and shown on the
+                                        "Series decisions" tab.
+    Resume                              skip studies already marked complete; redo half-finished ones.
+    Keep vendor technical fields        keep convolution kernel / scan options. Off for a blinded read.
+    Flat output                         no per-series sub-folders.
+    Verify after run                    runs Verify automatically when the run finishes.
+  Series-pick CSV (optional)  study_id, series_uid, series_description: when a particular series has already
+                              been analysed and must be the one kept. A thick pick falls back to the thin
+                              coronary recon and the study is flagged CHECK.
+  Path remap                  only when a manifest written on a Mac is run from Windows (or the other way):
+                              /Volumes/Drive=E:\   rewrites every source_folder that starts with /Volumes/Drive.
+
+Series decisions
+  One row per series per study: kept, dropped, or "Needs a look" (the engine fell back to a rule because the
+  header lacked contrast or cardiac-phase information, or a series-pick did not match). Filter, search by
+  study ID, export as CSV.
+
+Verify
+  Re-opens every output file and fails on any private tag, real date, original UID, vendor or institution
+  text, person name, or any extra word you type as a "needle" (a consultant surname, a hospital number). The
+  linkage logs' original IDs are used as needles automatically. Needles are not remembered between sessions.
+
+Logs & sharing
+  The whole _logs folder is confidential, not only the LINKAGE file: the per-file and per-study CSVs and the
+  run logs record the original folder paths. "Move confidential logs out" moves everything except
+  uid_salt.txt (needed so a re-run produces the same UIDs) to a folder you choose outside the output tree.
+  "Ready to share?" lists what still stands between the output folder and a reader.
+
+Tools menu
+  Audit slice thickness          lists finished studies whose kept series are thicker than the rule allows.
+  Audit and clear thick studies  deletes those study folders from the OUTPUT tree so the next Resume run
+                                 redoes them. Originals are not touched. You are asked to confirm.
+
+If the drive disconnects
+  The run stops by itself. Reconnect the drive, tick Resume, Start run.
+
+If nothing happens for minutes on one file
+  The log names the file. A failing drive is hanging on it. Stop, add the full path of that file to a
+  skip_files.txt next to the manifest, and run again with Resume. That study is then flagged CHECK because it
+  is missing a slice.

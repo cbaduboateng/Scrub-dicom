@@ -77,14 +77,23 @@ series is thicker than 0.75 mm the thin coronary recon is used instead and the s
 The `launchers/` folder has a double-clickable `RUN_ME.command` (macOS) and `RUN_ME.bat` (Windows) that
 install the package if needed, audit finished studies, run, and verify.
 
-### Dashboard
+### Desktop app (no Python needed)
+
+Download the `.dmg` (macOS) or the setup `.exe` / zip (Windows) from the release, or build it yourself with
+`packaging/build_macos.sh` / `packaging\build_windows.bat` (see [packaging/README.md](packaging/README.md)).
+The app is a plain window that wraps the same engine: choose a manifest or folders, set options, dry-run,
+start, watch progress, stop; review series decisions; run verify with your own needles; and a "Ready to share?"
+check that moves the confidential logs out of the output tree. It never connects to the internet. User guide:
+[docs/app_user_guide.md](docs/app_user_guide.md). From source: `pip install -e .` then `scrub-dicom-app`.
+
+### Developer dashboard
 
 ```
 scrub-dicom-dashboard
 ```
 
-opens a local page to set paths and options, start and watch a run, filter series decisions
-(kept / dropped / needs a look), and read the verify report.
+The v0.1 Streamlit page, kept for developers (`pip install "scrub-dicom[dashboard]"`). It starts a local web
+server bound to 127.0.0.1 with telemetry off; the desktop app is the supported front end.
 
 ## Built for long unattended runs on unreliable hardware
 
@@ -118,16 +127,25 @@ pytest
 ```
 
 `scrubdicom.fixtures` builds two synthetic patients with identifiers planted in private tags, sequences,
-comments and contrast times, plus a dose SR; the tests run, verify and inspect the result.
+comments and contrast times, plus a dose SR; the tests run, verify and inspect the result. The app tests drive the
+same engine through the app's child-process runner, and the repo-hygiene tests fail if a scan, linkage file, secret
+or network import is ever committed.
+
+## Security
+
+Where identifiable data lives while the tool runs, what the software will never do, and what remains the
+operator's job: [docs/security.md](docs/security.md). Short version: the whole `_logs` folder is confidential,
+verify must pass, `_review` needs a human, and the app never touches the network.
 
 ## Status and roadmap
 
 v0.1: command line + minimal dashboard, validated on ~520 real studies from Siemens, GE, Canon and
-Philips exports. Planned: packaged desktop app (no Python install), per-series thumbnails in the dashboard,
-pixel-level burned-in text detection for secondary captures, configurable tag policy profiles.
+Philips exports. v0.2: packaged desktop app (macOS / Windows, no Python install) wrapping the unchanged engine.
+Planned: per-series thumbnails, pixel-level burned-in text detection for secondary captures, configurable tag
+policy profiles, signed and notarised releases.
 
-## Licence
+## Credits and licence
 
-Copyright BB & Co Consulting Ltd. PolyForm Noncommercial 1.0.0: free for research, education and personal use;
-commercial use requires a licence from BB & Co Consulting Ltd (charles@bbandcoconsulting.com). See [LICENSE](LICENSE). Scrub-DICOM is a tool, not a legal opinion: you remain
+Built by Charles Badu-Boateng. Copyright BB & Co Holdings Ltd. PolyForm Noncommercial 1.0.0: free for research, education and personal use;
+commercial use requires a licence from BB & Co Holdings Ltd (charles@bbandcoconsulting.com). See [LICENSE](LICENSE). Scrub-DICOM is a tool, not a legal opinion: you remain
 responsible for confirming that your output meets your institution's and regulator's requirements.

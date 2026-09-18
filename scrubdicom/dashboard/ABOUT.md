@@ -9,3 +9,5 @@ protocol, kernel and scan options cleared; AE titles dropped from the file heade
 
 `--ctca-only` keeps just the coronary reconstruction (thin slices, cardiac field of view, contrast) and
 logs every decision. `verify` re-opens every output file and fails on anything left behind.
+
+Built by Charles Badu-Boateng. Copyright BB & Co Holdings Ltd. PolyForm Noncommercial 1.0.0.

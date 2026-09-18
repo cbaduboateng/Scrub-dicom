@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The two entitlements a hardened-runtime Python app needs: CPython JIT-free but loads .so extension
+         modules that are not signed by the same team, and allocates executable memory for ctypes/ffi. -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- Deliberately absent: network client/server, camera, microphone, location. The app needs none. -->
+</dict>
+</plist>

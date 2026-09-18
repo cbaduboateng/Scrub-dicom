@@ -1,8 +1,8 @@
 # Scrub-DICOM: working notes for Claude Code
 
 ## What this is
-Batch pseudonymisation of cardiac CT (CTCA) DICOM for blinded research reads. Owned by BB & Co Consulting Ltd,
-PolyForm Noncommercial licence. Maintainer: Charles Badu-Boateng (cardiology registrar, SCAD PhD). The v0.1 engine
+Batch pseudonymisation of cardiac CT (CTCA) DICOM for blinded research reads. Built by and credited to Charles Badu-Boateng; copyright and licence holder BB & Co Holdings Ltd,
+PolyForm Noncommercial. Maintainer: Charles Badu-Boateng (cardiology registrar, SCAD PhD). The v0.1 engine
 in `scrubdicom/core.py` has been validated on ~520 real studies (Siemens, GE, Canon, Philips exports) and is the
 thing not to break. Read `README.md`, `CHANGELOG.md` and `docs/tag_policy.md` before changing behaviour.
 
@@ -20,15 +20,26 @@ thing not to break. Read `README.md`, `CHANGELOG.md` and `docs/tag_policy.md` be
 - `scrubdicom/core.py`     engine + CLI (`run`, `verify`, `thick`)
 - `scrubdicom/survey.py`   standalone series survey / select
 - `scrubdicom/fixtures.py` synthetic test patients with planted identifiers (no real data anywhere in the repo)
-- `scrubdicom/dashboard/`  Streamlit dashboard (v0.1: developer-grade)
+- `scrubdicom/app/`       desktop app (v0.2): `model.py` logic (no Tk, unit-tested), `runner.py` engine child
+                           process, `ui.py` the Tk window, `__init__.py` entry with `--cli` re-entry and `--selftest`
+- `scrubdicom/dashboard/`  Streamlit dashboard (v0.1: developer-grade; binds 127.0.0.1, telemetry off)
+- `packaging/`             PyInstaller spec, macOS/Windows build scripts, Inno Setup script, icons
 - `launchers/`             double-click RUN_ME.command / RUN_ME.bat templates
 - `tests/`                 pytest; run `pytest` before every commit
+- `docs/`                  tag policy, packaging evaluation, security notes, app user guide
 
-## v0.2 goal
-A packaged desktop app (no Python install for the user) with the dashboard as the front end and the unchanged
-engine behind it: pick input/manifest/output, choose options, watch progress, review series decisions (kept /
-dropped / needs a look), read verify, export logs. Candidates: PyInstaller or Briefcase; evaluate and propose
-before building. Keep the CLI working; the app wraps it, it does not replace it.
+## v0.2 (done): desktop app
+Native Tk window over the unchanged engine, packaged with PyInstaller (decision record: `docs/packaging_evaluation.md`).
+The app never imports the engine into its own process: it spawns `<itself> --cli run ...` (frozen) or
+`python -m scrubdicom run ...` (source) and streams the output, so Stop is a real kill and every run is reproducible
+from a terminal. Rules for app work:
+- Logic goes in `scrubdicom/app/model.py` with a test; `ui.py` only draws and delegates.
+- The app must never import a network module (`tests/test_repo_hygiene.py` enforces it) and must never persist an
+  identifier in settings (`SETTINGS_KEYS` allow-list).
+- Treat the whole `_logs` folder as confidential, not just LINKAGE. See `docs/security.md`.
+- Build with `packaging/build_macos.sh` / `build_windows.bat` from python.org Python, never conda. A build that
+  fails the smoke tests ships nothing.
+- Before a release: run the frozen app on a real export from each vendor and verify it. Then sign and notarise.
 
 ## Conventions
 - British English in docs and UI. Plain, direct language; no marketing tone.

@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scrub-dicom"
-version = "0.1.0"
+version = "0.2.0"
 description = "Batch pseudonymisation of cardiac CT (CTCA) DICOM studies for blinded research reads: strips patient, centre and scanner identity, keeps only the coronary series, verifies its own output."
 readme = "README.md"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
-authors = [{name = "BB & Co Consulting Ltd", email = "charles@bbandcoconsulting.com"}]
+authors = [{name = "Charles Badu-Boateng", email = "charles@bbandcoconsulting.com"}]
 maintainers = [{name = "Charles Badu-Boateng"}]
 keywords = ["dicom", "anonymisation", "pseudonymisation", "cardiac CT", "CCTA", "reader study", "de-identification"]
 classifiers = [
@@ -25,14 +25,17 @@ dependencies = ["pydicom>=2.4"]
 xlsx = ["openpyxl>=3.1"]
 test = ["pytest>=7", "numpy>=1.24"]
 dashboard = ["streamlit>=1.30"]
+build = ["pyinstaller>=6.10", "pillow>=10"]
 
 [project.scripts]
 scrub-dicom = "scrubdicom.core:main"
 scrub-dicom-survey = "scrubdicom.survey:main"
 scrub-dicom-dashboard = "scrubdicom.dashboard:main"
+scrub-dicom-app = "scrubdicom.app:main"
 
 [tool.setuptools.packages.find]
 include = ["scrubdicom*"]
 
 [tool.setuptools.package-data]
 "scrubdicom.dashboard" = ["ABOUT.md"]
+"scrubdicom.app" = ["HELP.txt"]

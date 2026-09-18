@@ -1,0 +1,11 @@
+# Pinned versions for reproducible app builds. Update deliberately, then re-run the full test suite AND a run on
+# real exports before shipping: pydicom is the engine's only runtime dependency and the version that ships is the
+# version that was validated.
+pydicom==3.0.2
+openpyxl==3.1.5
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.7
+# build-time only (tests, fixtures, icons); not bundled into the app
+pytest==9.1.1
+numpy==2.5.3
+pillow==12.3.0
