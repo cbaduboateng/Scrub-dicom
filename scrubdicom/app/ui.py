@@ -154,6 +154,7 @@ class App(tk.Tk):
         self.job: str | None = None
         self.log_path: Path | None = None
         self.skipped_hidden = 0
+        self.prog_state: dict = {}
         self.previewed_key: tuple | None = None
         self.demo_stage: str | None = None
         self.step = 0
@@ -459,7 +460,7 @@ class App(tk.Tk):
         ttk.Checkbutton(adv3, text="Keep scanner technical details", variable=self.v_keep_tech, style=switch).pack(side="left", padx=(0, 24))
         ttk.Checkbutton(adv3, text="No series sub-folders", variable=self.v_flat, style=switch).pack(side="left")
         help_mark(adv3, "Keep scanner technical details: kernel and scan options; off for a blinded read.\nNo series sub-folders: one flat folder per patient.\nCheck output when done reads headers only and is safe on any cohort size; allow a few minutes per 100 patients.").pack(side="left", padx=(8, 0))
-        self.lbl_summary = ttk.Label(s3, textvariable=self.v_summary, wraplength=880, justify="left", font=("TkDefaultFont", 14))
+        self.lbl_summary = ttk.Label(s3, textvariable=self.v_summary, wraplength=880, justify="left", font=MONO)
         self.lbl_summary.grid(row=4, column=0, columnspan=4, sticky="w", pady=(16, 8))
         act = ttk.Frame(s3)
         act.grid(row=5, column=0, columnspan=4, sticky="w", pady=(4, 0))
@@ -513,7 +514,8 @@ class App(tk.Tk):
         prog = ttk.Frame(t, padding=(8, 0))
         prog.grid(row=3, column=0, sticky="ew", pady=(6, 4))
         prog.columnconfigure(0, weight=1)
-        ttk.Progressbar(prog, variable=self.v_progress, maximum=100).grid(row=0, column=0, sticky="ew")
+        self.bar = ttk.Progressbar(prog, variable=self.v_progress, maximum=100)
+        self.bar.grid(row=0, column=0, sticky="ew")
         ttk.Label(prog, textvariable=self.v_progress_text, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(3, 0))
         logf = ttk.Frame(t, padding=(8, 0))
         logf.grid(row=4, column=0, sticky="nsew")
@@ -886,13 +888,17 @@ class App(tk.Tk):
             who = f"one patient from {Path(s.input).name}, to be called {s.study_id.strip()}"
         else:
             who = f"the patients in {Path(s.input).name}, renamed by {Path(s.mapping).name}"
-        text = f"You are about to anonymise {who} into {s.output} using the \"{prof.name}\" profile."
+        opts = []
         if s.mode == "manifest" and s.ctca_only:
-            text += " Only the coronary series will be kept."
+            opts.append("coronary series only")
         if s.mode == "manifest" and s.resume:
-            text += " Patients already done will be skipped."
-        text += f" The linkage log and salt go to {s.confidential}, never into the output. Nothing on the original drive will change."
-        return text
+            opts.append("skip patients already done")
+        lines = [f"Anonymise {who}",
+                 f"Output:        {s.output}",
+                 f"Confidential:  {s.confidential}",
+                 f"Profile:       {prof.name}" + (f"   ·   {', '.join(opts)}" if opts else ""),
+                 "Originals are not modified."]
+        return "\n".join(lines)
 
     def _drive_note(self) -> str:
         s = self._spec()
@@ -966,6 +972,8 @@ class App(tk.Tk):
         self._clear_log()
         self._hide_card()
         self.skipped_hidden = 0
+        self.prog_state = {"n": 0, "total": 0, "study": "", "files": 0, "expected": None, "known": False}
+        self._bar_mode(False)
         self.v_progress.set(0)
         self.v_progress_text.set(f"{title} started")
         self.v_status.set(f"{title} running...")
@@ -992,10 +1000,8 @@ class App(tk.Tk):
         if not dry_run and self.previewed_key != self._spec_key():
             messagebox.showinfo("Preview first", "Run Preview first. It writes nothing and shows what would happen, so a wrong folder is caught before anything is written.")
             return
-        cmd = spec.command()
         if not dry_run and self.demo_stage is None:
-            msg = (f"{self.v_summary.get()}\n\nThe engine will run as:\n{shown_command(cmd)}\n\nStart?")
-            if not messagebox.askokcancel("Anonymise", msg):
+            if not messagebox.askokcancel("Anonymise", self.v_summary.get() + "\n\nStart?  (More > Show the command for the exact command line.)"):
                 return
         self._start_job("dry" if dry_run else "run", ["run", *spec.run_args()], None if dry_run else "run", "Preview" if dry_run else "Anonymisation")
 
@@ -1044,6 +1050,7 @@ class App(tk.Tk):
         title = titles.get(job or "", "Job")
         log_text = self.log.get("1.0", "end")
         stopped = log_text.rstrip().endswith("stopped by user **")
+        self._bar_mode(True)
         if rc == 0:
             self.v_progress_text.set(f"{title} finished in {took}")
             self.v_status.set(f"{title} finished")
@@ -1128,16 +1135,61 @@ class App(tk.Tk):
                 self._finish()
         self.after(POLL_MS, self._poll)
 
+    def _bar_mode(self, known: bool) -> None:
+        """Determinate when a percentage is known, pulsing otherwise."""
+        try:
+            if known:
+                self.bar.stop()
+                self.bar.configure(mode="determinate")
+            else:
+                self.bar.configure(mode="indeterminate")
+                self.bar.start(12)
+        except tk.TclError:
+            pass
+
     def _handle_line(self, line: str) -> None:
         if model.is_skipped_line(line) and not self.v_show_all.get():
             self.skipped_hidden += 1
             return
+        verb = "Anonymising" if self.job == "run" else "Previewing"
+        st = self.prog_state
+        start = model.parse_start(line)
+        beat = model.parse_heartbeat(line)
         prog = model.parse_progress(line)
-        if prog:
+        if start:
+            st.update(n=start[0], total=start[1], study=start[2], files=0, expected=start[3])
+            self._set_progress(verb)
+        elif beat:
+            st.update(study=beat[0], files=beat[1])
+            self._set_progress(verb)
+        elif prog:
+            st.update(n=prog.done, total=prog.total, study=prog.study, files=0, expected=None, known=True)
+            self._bar_mode(True)
             self.v_progress.set(prog.percent)
             self.v_progress_text.set(prog.text)
-            self._update_strip(("Anonymising " if self.job == "run" else "Previewing ") + f"{prog.done} of {prog.total}" + (f", about {prog.eta_minutes} min left" if prog.eta_minutes else ""), "info")
+            self._update_strip(f"{verb} patient {prog.done} of {prog.total} done" + (f", about {prog.eta_minutes} min left" if prog.eta_minutes else ""), "info")
         self._append_log(line, model.classify_line(line))
+
+    def _set_progress(self, verb: str) -> None:
+        st = self.prog_state
+        files = st.get("files", 0)
+        exp = st.get("expected")
+        n, total = st.get("n", 0), st.get("total", 0)
+        where = f"patient {n} of {total}: {st.get('study', '')}" if total else st.get("study", "")
+        if total and exp:
+            pct = ((n - 1) + min(files, exp) / exp) / total * 100
+            self._bar_mode(True)
+            self.v_progress.set(pct)
+            text = f"{verb} {where}, {files:,} of {exp:,} files"
+        elif exp:
+            self._bar_mode(True)
+            self.v_progress.set(min(files, exp) / exp * 100)
+            text = f"{verb} {where}, {files:,} of {exp:,} files"
+        else:
+            self._bar_mode(False)
+            text = f"{verb} {where}, {files:,} files so far"
+        self.v_progress_text.set(text)
+        self._update_strip(text, "info")
 
     # ------------------------------------------------------------------ log widget
     def _clear_log(self) -> None:

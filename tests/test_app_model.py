@@ -253,3 +253,11 @@ def test_find_applications(tmp_path):
     (tmp_path / "Fake.app").write_text("not a bundle")
     apps = model.find_applications([tmp_path, tmp_path / "missing"])
     assert [n for n, _ in apps] == ["Bee DICOM Viewer", "Zed"]
+
+
+def test_parse_start_and_heartbeat():
+    assert model.parse_start("[3/12] P3: starting, 224 files to write") == (3, 12, "P3", 224)
+    assert model.parse_start("[3/12] P3: starting") == (3, 12, "P3", None)
+    assert model.parse_start("[3/12] P3 <- H1: 224 files, 1 series") is None
+    assert model.parse_heartbeat("  P3: 200 files...") == ("P3", 200)
+    assert model.parse_heartbeat("[1/2] P3: starting") is None

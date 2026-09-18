@@ -722,7 +722,7 @@ def cmd_run(a: argparse.Namespace) -> int:
         rec["files"] += 1
         rec["series"].add(series_no)
         file_rows.append([study_id, str(path), str(dest), "REVIEW" if reason else "OK", reason or ""])
-        if rec["files"] % 250 == 0:
+        if rec["files"] % 100 == 0:
             log(f"  {study_id}: {rec['files']} files...")
 
     # mapping rows whose scans were never seen: tells the user which patients are still missing from disk
@@ -958,6 +958,8 @@ def run_manifest(a: argparse.Namespace) -> int:
                 no_ctca.append(study_id)
                 continue
         write_failed = None
+        expected = sum(len(groups[u]) for u in keep_uids) if keep_uids is not None else None
+        log(f"[{n}/{len(pairs)}] {study_id}: starting" + (f", {expected} files to write" if expected is not None else ""))
         for path in iter_dicom_files(folder, None):
             wd.touch(path)
             try:
@@ -1020,6 +1022,8 @@ def run_manifest(a: argparse.Namespace) -> int:
             rec["files"] += 1
             rec["series"].add(series_no)
             file_rows.append([study_id, str(path), str(dest), "REVIEW" if reason else "OK", reason or ""])
+            if rec["files"] % 100 == 0:
+                log(f"  {study_id}: {rec['files']} files...")
         study_skips = [x for x in SKIPPED_HITS if x.startswith(str(folder))]
         for x in study_skips:
             file_rows.append([study_id, x, "", "SKIPPED", "listed in skip_files.txt"])

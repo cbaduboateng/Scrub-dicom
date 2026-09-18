@@ -57,6 +57,8 @@ def test_runner_streams_progress_and_writes_log(fixtures, tmp_path):
     assert proc.done and proc.returncode == 0, "\n".join(lines)
     progress = [model.parse_progress(l) for l in lines if model.parse_progress(l)]
     assert [p.done for p in progress] == [1, 2, 3] and progress[0].total == 3
+    starts = [model.parse_start(l) for l in lines if model.parse_start(l)]
+    assert [s[0] for s in starts] == [1, 2], "a 'starting' line per patient found on disk"
     assert any(model.classify_line(l) == "error" for l in lines if "folder not found" in l)
     assert (out / "CBB0501" / ".complete").exists() and (out / "CBB0502" / ".complete").exists()
     text = log.read_text()

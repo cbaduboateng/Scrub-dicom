@@ -246,12 +246,32 @@ class Progress:
 
 
 def parse_progress(line: str) -> Progress | None:
+    if START_RE.match(line):          # '[n/N] id: starting' is the start of a patient, not its completion
+        return None
     m = PROGRESS_RE.match(line.strip())
     if not m:
         return None
     done, total, study = int(m.group(1)), int(m.group(2)), m.group(3)
     eta = ETA_RE.search(line)
     return Progress(done, total, study, done * 100 // max(total, 1), int(eta.group(1)) if eta else None)
+
+
+START_RE = re.compile(r"^\[(\d+)/(\d+)\]\s+(\S+): starting(?:, (\d+) files to write)?")
+HEARTBEAT_RE = re.compile(r"^\s+(\S+): (\d+) files\.\.\.")
+
+
+def parse_start(line: str) -> tuple[int, int, str, int | None] | None:
+    """'[3/12] P3: starting, 224 files to write' -> (3, 12, 'P3', 224)."""
+    m = START_RE.match(line)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), m.group(3), (int(m.group(4)) if m.group(4) else None)
+
+
+def parse_heartbeat(line: str) -> tuple[str, int] | None:
+    """'  P3: 200 files...' -> ('P3', 200)."""
+    m = HEARTBEAT_RE.match(line)
+    return (m.group(1), int(m.group(2))) if m else None
 
 
 def is_skipped_line(line: str) -> bool:
