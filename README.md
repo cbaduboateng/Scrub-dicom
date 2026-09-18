@@ -41,7 +41,7 @@ institution text, person name, or any string you pass with `--needle`.
 
 ```
 pip install scrub-dicom            # when published; until then:
-pip install git+https://github.com/<you>/scrub-dicom
+pip install git+https://github.com/cbaduboateng/Scrub-dicom
 ```
 
 Python 3.9+, macOS / Windows / Linux. `pip install "scrub-dicom[xlsx]"` for Excel mapping files,
