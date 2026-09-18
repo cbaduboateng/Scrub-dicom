@@ -195,6 +195,7 @@ class App(tk.Tk):
         # (which are often hospital numbers) are ever written to the settings file
         self.v_output, self.v_manifest, self.v_remap, self.v_input = tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar()
         self.v_confidential = tk.StringVar()
+        self.v_series_select = tk.StringVar()      # written by the viewer when series are ticked
         self.v_study_id = tk.StringVar()
         self.v_mapping, self.v_current_col, self.v_new_col, self.v_sheet = tk.StringVar(), sv("current_col"), sv("new_col"), sv("sheet")
         self.v_match_on = tk.StringVar(value=s.get("match_on") or "patientid")
@@ -779,11 +780,11 @@ class App(tk.Tk):
                        current_col=self.v_current_col.get(), new_col=self.v_new_col.get(), sheet=self.v_sheet.get(),
                        match_on=self.v_match_on.get(), series_pick=self.v_series_pick.get(), ctca_only=self.v_ctca.get(),
                        resume=self.v_resume.get(), keep_technical=self.v_keep_tech.get(), flat=self.v_flat.get(), dry_run=dry_run,
-                       profile=self.v_profile.get(), confidential=self.v_confidential.get())
+                       profile=self.v_profile.get(), confidential=self.v_confidential.get(), series_select=self.v_series_select.get())
 
     def _spec_key(self) -> tuple:
         s = self._spec()
-        return (s.mode, s.manifest, s.input, s.study_id, s.mapping, s.output, s.confidential, s.profile, s.ctca_only, s.series_pick, s.match_on, s.current_col, s.new_col)
+        return (s.mode, s.manifest, s.input, s.study_id, s.mapping, s.output, s.confidential, s.profile, s.ctca_only, s.series_pick, s.series_select, s.match_on, s.current_col, s.new_col)
 
     def _save_settings(self) -> None:
         model.spec_to_settings(self._spec(), self.settings)
@@ -835,7 +836,7 @@ class App(tk.Tk):
     def _watch_form(self) -> None:
         for v in (self.v_mode, self.v_output, self.v_manifest, self.v_remap, self.v_input, self.v_study_id, self.v_mapping,
                   self.v_current_col, self.v_new_col, self.v_sheet, self.v_match_on, self.v_series_pick, self.v_profile,
-                  self.v_ctca, self.v_resume, self.v_keep_tech, self.v_flat, self.v_confidential):
+                  self.v_ctca, self.v_resume, self.v_keep_tech, self.v_flat, self.v_confidential, self.v_series_select):
             v.trace_add("write", lambda *_: self._schedule_validate())
         self._live_validate()
 
@@ -893,6 +894,10 @@ class App(tk.Tk):
             opts.append("coronary series only")
         if s.mode == "manifest" and s.resume:
             opts.append("skip patients already done")
+        if s.series_select.strip():
+            from .preview import read_selection
+            sel = read_selection(Path(s.series_select))
+            opts.append(f"only the ticked series for {len(sel)} patient(s)")
         lines = [f"Anonymise {who}",
                  f"Output:        {s.output}",
                  f"Confidential:  {s.confidential}",

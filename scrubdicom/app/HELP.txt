@@ -90,6 +90,10 @@ THE VIEWER  (button "Preview a patient in the viewer..." on tab 1; "Open patient
     Anonymised output  what WAS written, plus the quarantined files in _review. Draw boxes over burned-in text,
                        then "Apply and release": the boxes are painted black in the anonymised copy, the file moves
                        into the patient's folder, and the action is logged. Run the output check again afterwards.
+  Tick boxes: in the "Original scans" view every series has a "Use" tick. The rule's choices start ticked. Tick
+  or untick what you want, press "Anonymise only the ticked series", and the run keeps exactly those for that
+  patient (other patients are unaffected). "Let the rule decide" clears it. The ticks are saved in the
+  confidential folder (series_selection.csv) and the step-3 summary says how many patients have ticks.
   Viewing: mouse wheel or arrow keys scroll slices. The "Mouse drag" switch sets what a drag does: window/level,
   zoom, or pan. The Zoom slider, the + and - buttons, cmd/ctrl + wheel and 1:1 / Fit all zoom; double-click = fit;
   right-drag always pans; space = cine. kVp, mAs and CTDIvol are shown in the series list and bottom right. Presets for coronary, soft tissue,

@@ -648,10 +648,13 @@ def cmd_run(a: argparse.Namespace) -> int:
     salt = read_or_make_salt(conf, out, a.salt, a.dry_run)
 
     run_ts = time.strftime("%Y%m%d_%H%M%S")
-    per_study = defaultdict(lambda: {"files": 0, "series": set(), "review": 0, "errors": 0,
+    per_study = defaultdict(lambda: {"files": 0, "series": set(), "review": 0, "errors": 0, "dropped": 0,
                                      "source_keys": set(), "orig_patient_ids": set(), "orig_names": set(),
                                      "orig_study_dates": set(), "orig_sex": set(), "orig_dob": set(),
                                      "orig_series_desc": set(), "orig_manufacturer": set()})
+    selection = load_series_selection(a.select_series) if getattr(a, "select_series", None) else {}
+    if selection:
+        log(f"Series selection: {sum(len(v) for v in selection.values())} series ticked for {len(selection)} patient(s)")
     unmapped = defaultdict(int)
     skipped_nondicom = 0
     file_rows = []
@@ -678,6 +681,10 @@ def cmd_run(a: argparse.Namespace) -> int:
                 continue  # never copy an unmapped file through
 
         rec = per_study[study_id]
+        sel = selection.get(study_id)
+        if sel is not None and str(ds.get("SeriesInstanceUID", "")) not in sel:
+            rec["dropped"] += 1
+            continue
         rec["source_keys"].add(key)
         rec["orig_patient_ids"].add(str(ds.get("PatientID", "")))
         rec["orig_names"].add(str(ds.get("PatientName", "")))
@@ -776,6 +783,7 @@ def cmd_run(a: argparse.Namespace) -> int:
     for sid, r in sorted(per_study.items()):
         log(f"  {sid}: {r['files']} files, {len(r['series'])} series"
             + (f", {r['review']} sent to _review" if r["review"] else "")
+            + (f", {r['dropped']} files of unticked series dropped" if r["dropped"] else "")
             + (f", {r['errors']} ERRORS" if r["errors"] else ""))
     if unmapped:
         log(f"  UNMAPPED (skipped, not copied): {dict(unmapped)}  -> see {conf / f'unmapped_{run_ts}.csv'}")
@@ -797,6 +805,18 @@ def load_series_picks(path: str) -> dict[str, list[dict]]:
                 picks[r["study_id"].strip()].append({"uid": (r.get("series_uid") or "").strip(),
                                                      "desc": (r.get("series_description") or "").strip()})
     return picks
+
+
+def load_series_selection(path: str) -> dict[str, set[str]]:
+    """CSV with study_id, series_uid: for the listed patients keep exactly these series (ticked in the viewer),
+    whatever the coronary rule would say. Patients not listed are unaffected."""
+    sel: dict[str, set[str]] = defaultdict(set)
+    with open(path, newline="", encoding="utf-8-sig") as fh:
+        for r in csv.DictReader(fh):
+            sid, uid = (r.get("study_id") or "").strip(), (r.get("series_uid") or "").strip()
+            if sid and uid:
+                sel[sid].add(uid)
+    return dict(sel)
 
 
 def norm_desc(d: str) -> str:
@@ -828,6 +848,9 @@ def run_manifest(a: argparse.Namespace) -> int:
     summary, link_rows, file_rows, missing, series_rows, no_ctca, check_studies = [], [], [], [], [], [], []
     series_log = conf / f"series_{run_ts}.csv"
     picks = load_series_picks(a.series_pick) if a.series_pick else {}
+    selection = load_series_selection(a.select_series) if getattr(a, "select_series", None) else {}
+    if selection:
+        log(f"Series selection: {sum(len(v) for v in selection.values())} series ticked for {len(selection)} patient(s)")
     pick_stats = {"uid": 0, "desc": 0, "unmatched": 0}
     unmatched_picks = []
     skipped = 0
@@ -865,7 +888,8 @@ def run_manifest(a: argparse.Namespace) -> int:
         counter = 0
         keep_uids = None
         pick_note = ""
-        if a.ctca_only:
+        sel = selection.get(study_id)
+        if a.ctca_only or sel is not None:
             # pre-pass: group files by series, classify each series from one header
             groups = defaultdict(list)
             heads = {}
@@ -883,7 +907,15 @@ def run_manifest(a: argparse.Namespace) -> int:
             verdicts = {uid: classify_series(heads[uid], len(files)) for uid, files in groups.items()}
             keep_uids = {u for u, (v, _) in verdicts.items() if v == "keep"}
             pick_note = ""
-            if study_id in picks:
+            if sel is not None:
+                # the viewer's tick boxes decide, whatever the rule said
+                keep_uids = {u for u in groups if u in sel}
+                for u in groups:
+                    verdicts[u] = ("keep", "ticked in the viewer") if u in keep_uids else ("drop", "not ticked in the viewer")
+                pick_note = f"{len(keep_uids)} ticked series"
+                if not keep_uids:
+                    log(f"[{n}/{len(pairs)}] {study_id} <- {folder.name}: ** none of the ticked series were found ({len(groups)} series) - skipped **")
+            elif study_id in picks:
                 # the analysed series wins: match on UID first, then on description (copies re-anonymised elsewhere get new UIDs)
                 chosen = set()
                 for pk in picks[study_id]:
@@ -915,11 +947,11 @@ def run_manifest(a: argparse.Namespace) -> int:
                 else:
                     unmatched_picks.append(study_id)
                     pick_note = "FAI pick NOT found - rule fallback"
-            if not keep_uids:  # nothing certain: fall back to thin cardiac-sized recons lacking contrast/phase info
+            if not keep_uids and sel is None:  # nothing certain: fall back to thin cardiac-sized recons lacking contrast/phase info
                 keep_uids = {u for u, (v, _) in verdicts.items() if v == "maybe"}
                 if keep_uids:
                     check_studies.append(study_id)
-            if not keep_uids:
+            if not keep_uids and sel is None:
                 # last resort: an export that is a single original thin axial CT series with >=100 images is
                 # almost certainly the CTCA whatever it is called; keep it and flag it for checking
                 last = []
@@ -953,7 +985,8 @@ def run_manifest(a: argparse.Namespace) -> int:
                 except OSError:
                     pass
             if not keep_uids:
-                log(f"[{n}/{len(pairs)}] {study_id} <- {folder.name}: ** NO CORONARY SERIES FOUND ({len(groups)} series) - skipped **")
+                if sel is None:
+                    log(f"[{n}/{len(pairs)}] {study_id} <- {folder.name}: ** NO CORONARY SERIES FOUND ({len(groups)} series) - skipped **")
                 summary.append((study_id, str(folder), dict(rec, files=0)))
                 no_ctca.append(study_id)
                 continue
@@ -1438,6 +1471,8 @@ def main(argv=None):
     r.add_argument("--log-file", help="also append everything printed to this file")
     r.add_argument("--series-pick", help="CSV (study_id, series_uid, series_description) naming the analysed series to keep per study; "
                                           "used with --ctca-only, overrides the rule when it matches")
+    r.add_argument("--select-series", help="CSV (study_id, series_uid): for the listed patients keep exactly these series (ticked in the "
+                                           "app's viewer); other patients are unaffected")
     r.add_argument("--ctca-only", action="store_true",
                    help="manifest mode: keep only coronary CTA series (drops localisers, calcium score, chest recons, "
                         "lung/sharp kernels, MPRs, dose reports); decisions logged to _logs/series_<ts>.csv")

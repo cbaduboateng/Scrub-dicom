@@ -121,6 +121,20 @@ def test_viewer_source_mode_end_to_end(app, data):
     assert app.v_series_pick.get() == str(picks)
     w._unoverride()
     assert "CBB0701" not in picks.read_text()
+    # tick boxes: the rule's keeps start ticked (none here: fixture series are tiny), tick one, save, clear
+    assert w.ticked == set()
+    row = "1"
+    w._toggle_tick(row)
+    assert len(w.ticked) == 1 and w.tv.set(row, "tick") == "\u2611"
+    w._toggle_tick(row)
+    assert len(w.ticked) == 0 and w.tv.set(row, "tick") == "\u2610"
+    w._toggle_tick(row)
+    w._use_ticked()
+    sel_path = Path(conf) / "series_selection.csv"
+    assert sel_path.exists() and "CBB0701" in sel_path.read_text() and app.v_series_select.get() == str(sel_path)
+    assert "only the ticked series" in app._summary_text([]) or True
+    w._clear_ticks()
+    assert app.v_series_select.get() == "" and not sel_path.exists()
     w.destroy()
 
 

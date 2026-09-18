@@ -550,3 +550,43 @@ def manifest_patients(manifest: str, remap: str | None = None) -> list[tuple[str
     except (SystemExit, OSError, KeyError):
         return []
 
+
+
+# ---------------------------------------------------------------------------------------------- tick-box selection
+
+def selection_path(confidential: str, manifest: str = "") -> Path:
+    """Where the viewer records ticked series: the confidential folder, else next to the patient list."""
+    if confidential.strip():
+        return Path(confidential).expanduser() / "series_selection.csv"
+    return Path(manifest).resolve().with_name("series_selection.csv") if manifest.strip() else Path.home() / "series_selection.csv"
+
+
+def read_selection(path: Path) -> dict[str, set[str]]:
+    sel: dict[str, set[str]] = {}
+    try:
+        with open(path, newline="", encoding="utf-8-sig") as fh:
+            for r in csv.DictReader(fh):
+                sid, uid = (r.get("study_id") or "").strip(), (r.get("series_uid") or "").strip()
+                if sid and uid:
+                    sel.setdefault(sid, set()).add(uid)
+    except OSError:
+        pass
+    return sel
+
+
+def write_selection(path: Path, study_id: str, series: list[Series]) -> Path:
+    """Replace the rows for study_id with the given series (none = remove the patient from the file)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows: list[dict] = []
+    if path.exists():
+        with open(path, newline="", encoding="utf-8-sig") as fh:
+            rows = [r for r in csv.DictReader(fh) if (r.get("study_id") or "").strip() != study_id]
+    for s in series:
+        if not s.uid.startswith("nouid-"):
+            rows.append({"study_id": study_id, "series_uid": s.uid, "series_description": s.description})
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=["study_id", "series_uid", "series_description"])
+        w.writeheader()
+        w.writerows(rows)
+    return path

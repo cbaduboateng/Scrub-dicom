@@ -95,6 +95,7 @@ class JobSpec:
     dry_run: bool = False
     profile: str = ""          # path to a profile JSON; "" = the default full-blind profile
     confidential: str = ""     # folder outside the output tree for linkage, salt and run logs (the app requires it)
+    series_select: str = ""    # CSV of ticked series per patient (written by the viewer); "" = the rule decides
 
     def validate(self) -> list[str]:
         p: list[str] = []
@@ -127,6 +128,8 @@ class JobSpec:
                     p.append(f"Mapping file not found: {self.mapping}")
         if self.profile.strip() and not Path(self.profile).is_file():
             p.append(f"Profile file not found: {self.profile}")
+        if self.series_select.strip() and not Path(self.series_select).is_file():
+            p.append(f"Series selection file not found: {self.series_select}")
         if not self.confidential.strip():
             p.append("Choose a confidential folder for the linkage log (outside the output folder).")
         elif self.output.strip():
@@ -181,6 +184,8 @@ class JobSpec:
             a += ["--profile", self.profile.strip()]
         if self.confidential.strip():
             a += ["--confidential", self.confidential.strip()]
+        if self.series_select.strip():
+            a += ["--select-series", self.series_select.strip()]
         if self.dry_run:
             a.append("--dry-run")
         return a

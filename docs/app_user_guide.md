@@ -135,6 +135,12 @@ Open it from tab 1 ("Preview a patient in the viewer..."), tab 2 ("Open patient 
   in the anonymised copy, the file moves into the patient's folder, and the action is logged. Run the
   output check again afterwards; the share checklist reminds you.
 
+**Choosing series by hand.** In the "Original scans" view every series has a **Use** tick; the rule's
+choices start ticked. Tick or untick what you want and press **Anonymise only the ticked series**: the
+run keeps exactly those series for that patient and leaves other patients to the rule. **Let the rule
+decide** clears it. The ticks are saved in the confidential folder, and the step-3 summary says how many
+patients have ticks.
+
 Viewing works the way other DICOM viewers do: mouse wheel or arrow keys scroll slices. The **Mouse
 drag** switch sets what a drag does: window/level, zoom, or pan. The zoom slider, the + and - buttons,
 cmd/ctrl + wheel and 1:1 / Fit all zoom; double-click fits; right-drag always pans; space plays cine.

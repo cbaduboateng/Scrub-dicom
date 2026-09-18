@@ -165,3 +165,27 @@ def test_ocr_module_is_optional():
     if not ocr.available():
         import numpy as np
         assert ocr.words_in_array(np.zeros((32, 32))) == ""
+
+
+def test_select_series_keeps_exactly_the_ticked_series(fixtures, tmp_path):
+    from scrubdicom.app import preview as pv
+    series = pv.scan_patient(fixtures / "ORFAN0231")
+    s4 = next(s for s in series if s.number == "4")
+    sel = tmp_path / "selection.csv"
+    sel.write_text(f"study_id,series_uid,series_description\nP1,{s4.uid},{s4.description}\n")
+    # single-folder mode
+    out = tmp_path / "out"
+    r = run(["run", "--input", str(fixtures / "ORFAN0231"), "--output", str(out), "--study-id", "P1", "--select-series", str(sel), "--no-ocr"])
+    assert r.returncode == 0 and "Series selection: 1 series ticked" in r.stdout and "unticked series dropped" in r.stdout
+    kept = {pydicom.dcmread(str(p), stop_before_pixels=True).SeriesNumber for p in (out / "P1").rglob("*.dcm")}
+    assert kept == {4}
+    # manifest mode without the coronary rule: the ticks decide, and the decisions are logged
+    out2, conf = tmp_path / "out2", tmp_path / "conf"
+    m = tmp_path / "m.csv"
+    m.write_text(f"source_folder,study_id\n{fixtures / 'ORFAN0231'},P1\n{fixtures / 'ORFAN0418'},P2\n")
+    r2 = run(["run", "--manifest", str(m), "--output", str(out2), "--confidential", str(conf), "--select-series", str(sel), "--no-ocr"])
+    assert r2.returncode == 0, r2.stdout
+    assert {pydicom.dcmread(str(p), stop_before_pixels=True).SeriesNumber for p in (out2 / "P1").rglob("*.dcm")} == {4}
+    assert len(list((out2 / "P2").rglob("*.dcm"))) > 4, "the unlisted patient is unaffected"
+    rows = list(conf.glob("series_*.csv"))[0].read_text()
+    assert "ticked in the viewer" in rows and "not ticked in the viewer" in rows

@@ -1,7 +1,9 @@
 # Changelog
 
 ## 0.6.0 (2026-09-18)
-Security hardening.
+Security hardening, and tick-box series selection.
+- Viewer: a "Use" tick per series; "Anonymise only the ticked series" writes a selection the run honours
+  (`run --select-series`), per patient, logged as "ticked / not ticked in the viewer". Live file-level progress.
 - Confidential folder: `run --confidential FOLDER` writes the linkage log, the UID salt and every run log there,
   outside the output tree; the app requires one (step 2, with a Suggest button). Without it the engine warns.
   The salt now travels with the linkage material (it is what makes hashed UIDs and shifted dates linkable).

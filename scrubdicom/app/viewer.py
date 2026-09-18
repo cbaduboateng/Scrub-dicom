@@ -130,9 +130,12 @@ class ViewerWindow(tk.Toplevel):
         ttk.Label(left, text="Series", style="H2.TLabel").pack(anchor="w")
         tvf = ttk.Frame(left)
         tvf.pack(fill="both", expand=True)
-        self.tv = ttk.Treeview(tvf, columns=("no", "desc", "n", "mm", "kvp", "dec", "why"), show=("tree", "headings"), height=12, selectmode="browse")
+        self.tv = ttk.Treeview(tvf, columns=("tick", "no", "desc", "n", "mm", "kvp", "dec", "why"), show=("tree", "headings"), height=12, selectmode="browse")
         self.tv.column("#0", width=72, minwidth=72, stretch=False)
         self.tv.heading("#0", text="")
+        self.tv.heading("tick", text="Use")
+        self.tv.column("tick", width=36, minwidth=36, stretch=False, anchor="center")
+        self.tv.bind("<Button-1>", self._tick_click, add="+")
         for k, h, w in (("no", "S#", 40), ("desc", "Description", 160), ("n", "Imgs", 45), ("mm", "mm", 42), ("kvp", "kVp", 42), ("dec", "Decision", 80), ("why", "Why", 200)):
             self.tv.heading(k, text=h)
             self.tv.column(k, width=w, minwidth=30, stretch=k in ("desc", "why"))
@@ -145,10 +148,15 @@ class ViewerWindow(tk.Toplevel):
         self.tv.bind("<<TreeviewSelect>>", lambda _e: self._select_series())
         lb = ttk.Frame(left)
         lb.pack(fill="x", pady=(6, 0))
-        self.b_override = ttk.Button(lb, text="Keep this series instead", command=self._override)
-        self.b_override.pack(side="left")
+        self.b_use_ticked = ttk.Button(lb, text="Anonymise only the ticked series", style=theme.style_or("Accent.TButton"), command=self._use_ticked)
+        self.b_use_ticked.pack(side="left")
+        self.b_clear_ticks = ttk.Button(lb, text="Let the rule decide", command=self._clear_ticks)
+        self.b_clear_ticks.pack(side="left", padx=(6, 0))
+        self.lbl_ticks = ttk.Label(left, text="", style="Muted.TLabel", wraplength=300, justify="left")
+        self.lbl_ticks.pack(anchor="w", pady=(4, 0))
+        self.ticked: set[str] = set()
+        self.b_override = ttk.Button(lb, text="Keep this series instead", command=self._override)   # rule-fallback override; kept for manifests with analysed picks
         self.b_unoverride = ttk.Button(lb, text="Undo", command=self._unoverride)
-        self.b_unoverride.pack(side="left", padx=(6, 0))
 
         # ---- middle: image
         mid = ttk.Frame(pane)
@@ -304,6 +312,8 @@ class ViewerWindow(tk.Toplevel):
         manifest = self.source_mode and spec.mode == "manifest"
         self.b_override.state(["!disabled"] if manifest else ["disabled"])
         self.b_unoverride.state(["!disabled"] if manifest else ["disabled"])
+        for b in (self.b_use_ticked, self.b_clear_ticks):
+            b.state(["!disabled"] if self.source_mode else ["disabled"])
         self.lbl_header.configure(text="Header: before and after" if self.source_mode else "Header of the anonymised file")
         self.v_changed_only.set(self.source_mode)
         if pick:
@@ -380,18 +390,80 @@ class ViewerWindow(tk.Toplevel):
         self.thumbs = {}
         self.tv.delete(*self.tv.get_children(""))
         override = pv.current_override(self._picks_path(create=False), self._study_id()) if self.source_mode else ""
+        saved = pv.read_selection(self._selection_path()).get(self._study_id()) if self.source_mode else None
+        self.ticked = set(saved) if saved else {s.uid for s in series if s.verdict == "keep"}
+        self.ticks_saved = saved is not None
         for i, s in enumerate(series):
             tag = s.verdict
             dec = {"keep": "keep", "maybe": "needs a look", "drop": "drop", "review": "quarantined"}.get(s.verdict, s.verdict)
             if override and override in (s.uid, s.description):
                 dec, tag = "KEEP (override)", "override"
-            self.tv.insert("", "end", iid=str(i), text="", values=(s.number, s.description, s.n_images, f"{s.thickness:g}" if s.thickness else "", s.kvp, dec, s.reason), tags=(tag,))
+            if saved is not None:
+                dec, tag = ("ticked", "keep") if s.uid in saved else ("not ticked", "drop")
+            mark = "" if not self.source_mode else ("\u2611" if s.uid in self.ticked else "\u2610")
+            self.tv.insert("", "end", iid=str(i), text="", values=(mark, s.number, s.description, s.n_images, f"{s.thickness:g}" if s.thickness else "", s.kvp, dec, s.reason), tags=(tag,))
+        self._ticks_label()
         n = sum(s.n_images for s in series)
         self.v_status.set(f"{len(series)} series, {n} images. Study ID: {self._study_id()}")
         first = next((str(i) for i, s in enumerate(series) if s.verdict in ("keep", "review")), "0" if series else None)
         if first is not None:
             self.tv.selection_set(first)
             self.tv.see(first)
+
+    def _selection_path(self) -> Path:
+        return pv.selection_path(self.spec.confidential, self.spec.manifest)
+
+    def _ticks_label(self) -> None:
+        if not self.source_mode:
+            self.lbl_ticks.configure(text="")
+            return
+        n = len(self.ticked)
+        self.lbl_ticks.configure(text=(f"{n} series ticked and saved for this patient: only these will be anonymised." if getattr(self, "ticks_saved", False)
+                                       else f"{n} series ticked (the rule's choice). Change the ticks and press the button to anonymise only those."))
+
+    def _tick_click(self, e) -> None:
+        if not self.source_mode or self.tv.identify_column(e.x) != "#1":
+            return
+        row = self.tv.identify_row(e.y)
+        if row:
+            self._toggle_tick(row)
+
+    def _toggle_tick(self, row: str) -> None:
+        s = self.series[int(row)]
+        if s.uid in self.ticked:
+            self.ticked.discard(s.uid)
+        else:
+            self.ticked.add(s.uid)
+        self.tv.set(row, "tick", "\u2611" if s.uid in self.ticked else "\u2610")
+        self.ticks_saved = False
+        self._ticks_label()
+
+    def _use_ticked(self) -> None:
+        if not self.series:
+            return
+        chosen = [s for s in self.series if s.uid in self.ticked]
+        if not chosen:
+            messagebox.showinfo("Nothing ticked", "Tick at least one series in the 'Use' column.", parent=self)
+            return
+        path = pv.write_selection(self._selection_path(), self._study_id(), chosen)
+        self.app.v_series_select.set(str(path))
+        self.ticks_saved = True
+        self._show_series(self.series)
+        self.v_status.set(f"Saved: {len(chosen)} series for {self._study_id()} in {path.name}. The run will keep only these.")
+
+    def _clear_ticks(self) -> None:
+        path = self._selection_path()
+        if path.exists():
+            pv.write_selection(path, self._study_id(), [])
+            if not pv.read_selection(path):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+                self.app.v_series_select.set("")
+        self.ticks_saved = False
+        self._show_series(self.series)
+        self.v_status.set("Selection cleared for this patient; the rule decides again.")
 
     def _set_thumb(self, uid: str, ppm: bytes) -> None:
         for i, s in enumerate(self.series):
