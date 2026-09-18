@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 import tkinter as tk
+from pathlib import Path
 
 import pytest
 
@@ -113,8 +114,10 @@ def test_viewer_source_mode_end_to_end(app, data):
     # series override written next to the manifest, then removed
     w._override()
     pump(w, 0.3)
-    picks = pv.default_picks_path(str(data[2]))
-    assert picks.exists() and "CBB0701" in picks.read_text()
+    conf = app.v_confidential.get().strip()
+    assert conf and conf.endswith("_CONFIDENTIAL"), "the confidential folder is auto-suggested from the output"
+    picks = Path(conf) / "series_picks.csv"
+    assert picks.exists() and "CBB0701" in picks.read_text(), "overrides live with the confidential material"
     assert app.v_series_pick.get() == str(picks)
     w._unoverride()
     assert "CBB0701" not in picks.read_text()

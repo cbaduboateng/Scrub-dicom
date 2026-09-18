@@ -504,6 +504,7 @@ def default_picks_path(manifest: str) -> Path:
 def set_series_override(picks_path: Path, study_id: str, series: Series) -> tuple[Path, str]:
     """Add or replace the row for study_id in a series-pick CSV. Returns (path, warning-or-empty)."""
     picks_path = Path(picks_path)
+    picks_path.parent.mkdir(parents=True, exist_ok=True)   # the confidential folder may not exist before the first run
     rows: list[dict] = []
     if picks_path.exists():
         with open(picks_path, newline="", encoding="utf-8-sig") as fh:

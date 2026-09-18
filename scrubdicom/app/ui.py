@@ -176,7 +176,7 @@ class App(tk.Tk):
         self._show_step(0)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.report_callback_exception = self._on_exception   # Tk callbacks: log (paths redacted) and tell the user
-        self.v_output.trace_add("write", lambda *_: self._schedule_output_refresh())
+        self.v_output.trace_add("write", lambda *_: (self._schedule_output_refresh(), self._suggest_confidential()))
         self.v_manifest.trace_add("write", lambda *_: self._schedule_output_refresh())
         self._refresh_all()
         self._watch_form()
@@ -480,6 +480,8 @@ class App(tk.Tk):
         self.b_next = ttk.Button(nav, text="Next", width=10, style=accent, command=lambda: self._show_step(self.step + 1))
         self.b_next.pack(side="left", padx=(8, 0))
         ttk.Label(nav, textvariable=self.v_step, style="Muted.TLabel").pack(side="left", padx=(16, 0))
+        self.v_nav_reason = tk.StringVar(value="")
+        ttk.Label(nav, textvariable=self.v_nav_reason, style="Warn.TLabel", wraplength=520, justify="left").pack(side="left", padx=(16, 0))
         more = ttk.Menubutton(nav, text="More")
         mm = tk.Menu(more, tearoff=False)
         mm.add_command(label="Show the command this will run", command=self._show_command)
@@ -728,6 +730,16 @@ class App(tk.Tk):
         else:
             messagebox.showinfo(APP_NAME, "Nothing to open yet." if not p else f"Not found:\n{p}")
 
+    def _suggest_confidential(self) -> None:
+        """Fill the confidential folder with the suggested sibling whenever it is empty, equal to the output, or still
+        the previous suggestion, so the ordinary case needs no thought and the same-folder mistake cannot happen."""
+        out = self.v_output.get().strip()
+        cur = self.v_confidential.get().strip()
+        prev = getattr(self, "_last_suggested", "")
+        if out and (not cur or cur == out or cur == prev):
+            self._last_suggested = model.suggest_confidential(out)
+            self.v_confidential.set(self._last_suggested)
+
     def _goto_step(self, i: int) -> None:
         self.nb.select(self.tab_run)
         self._show_step(i)
@@ -823,6 +835,8 @@ class App(tk.Tk):
         running = bool(self.proc and self.proc.running)
         ok_here = {0: not step1, 1: not step2, 2: not problems}[self.step]
         self.b_next.state(["!disabled"] if ok_here and self.step < 2 else ["disabled"])
+        here = {0: step1, 1: step2, 2: problems}[self.step]
+        self.v_nav_reason.set(("Next needs: " + here[0]) if here and self.step < 2 else "")
         previewed = self.previewed_key == self._spec_key()
         if problems:
             self.v_ready.set("Before you can start: " + "  ·  ".join(problems[:3]))
@@ -901,7 +915,7 @@ class App(tk.Tk):
             else:
                 checks = model.share_readiness(out)
                 levels = {c.level for c in checks}
-                done = any(c.title.endswith("completed studies") for c in checks)
+                done = any(c.title[:1].isdigit() and c.title.endswith("completed studies") for c in checks)
                 if "block" in levels:
                     if any(c.title.startswith("Verify FAILED") for c in checks):
                         text, level = "Check failed: identifiers found. Do not share.", "error"
