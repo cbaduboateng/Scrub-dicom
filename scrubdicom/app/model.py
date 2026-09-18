@@ -498,14 +498,14 @@ def move_logs_out(out: Path, dest_parent: Path) -> tuple[list[Path], Path]:
 # ---------------------------------------------------------------------------------------------- settings
 
 SETTINGS_KEYS = {
-    # paths the user chose, and booleans. Nothing that identifies a patient is ever written here.
-    "mode", "output", "manifest", "remap", "input", "mapping", "current_col", "new_col", "sheet", "match_on",
-    "series_pick", "ctca_only", "resume", "keep_technical", "flat", "verify_after_run", "show_all_lines", "geometry", "profile", "theme", "external_viewer", "first_run_done",
+    # options and preferences only. No paths: folder names are often hospital numbers, and the app opens clean.
+    "mode", "current_col", "new_col", "sheet", "match_on", "ctca_only", "resume", "keep_technical", "flat",
+    "verify_after_run", "show_all_lines", "geometry", "profile", "theme", "external_viewer",
 }
 _DEFAULTS = {
-    "mode": "manifest", "output": "", "manifest": "", "remap": "", "input": "", "mapping": "", "current_col": "",
-    "new_col": "", "sheet": "", "match_on": "patientid", "series_pick": "", "ctca_only": True, "resume": True,
-    "keep_technical": False, "flat": False, "verify_after_run": True, "show_all_lines": False, "geometry": "", "profile": "", "theme": "", "external_viewer": "", "first_run_done": False,
+    "mode": "manifest", "current_col": "", "new_col": "", "sheet": "", "match_on": "patientid", "ctca_only": True, "resume": True,
+    "keep_technical": False, "flat": False, "verify_after_run": True, "show_all_lines": False, "geometry": "", "profile": "",
+    "theme": "", "external_viewer": "",
 }
 
 
@@ -545,11 +545,10 @@ class Settings:
             self.values[k] = v
 
     def spec(self) -> JobSpec:
+        """Options only; paths are never persisted, so they come back empty."""
         v = self.values
-        return JobSpec(mode=v["mode"], output=v["output"], manifest=v["manifest"], remap=v["remap"], input=v["input"],
-                       mapping=v["mapping"], current_col=v["current_col"], new_col=v["new_col"], sheet=v["sheet"],
-                       match_on=v["match_on"], series_pick=v["series_pick"], ctca_only=v["ctca_only"], resume=v["resume"],
-                       keep_technical=v["keep_technical"], flat=v["flat"], profile=v.get("profile", ""))
+        return JobSpec(mode=v["mode"], current_col=v["current_col"], new_col=v["new_col"], sheet=v["sheet"], match_on=v["match_on"],
+                       ctca_only=v["ctca_only"], resume=v["resume"], keep_technical=v["keep_technical"], flat=v["flat"], profile=v.get("profile", ""))
 
 
 def spec_to_settings(spec: JobSpec, settings: Settings) -> None:

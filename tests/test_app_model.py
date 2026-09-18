@@ -188,33 +188,34 @@ def test_linkage_files_found_anywhere_in_tree(tmp_path):
 def test_settings_persist_only_allowlisted_keys(tmp_path):
     p = tmp_path / "settings.json"
     s = Settings.load(p)
-    s.set("output", "/out")
+    s.set("match_on", "folder")
     s.set("ctca_only", False)
-    s.set("needles", "SMITH")          # not allow-listed: silently ignored
-    s.values["study_id"] = "STUDY-1"   # even a direct write must not be persisted
+    s.set("output", "/hospital/H1234567")   # paths are not allow-listed: never persisted
+    s.set("needles", "SMITH")               # not allow-listed: silently ignored
+    s.values["study_id"] = "STUDY-1"        # even a direct write must not be persisted
     s.save()
     raw = json.loads(p.read_text())
-    assert raw["output"] == "/out" and raw["ctca_only"] is False
-    assert "needles" not in raw and "study_id" not in raw
+    assert raw["match_on"] == "folder" and raw["ctca_only"] is False
+    assert "needles" not in raw and "study_id" not in raw and "output" not in raw and "H1234567" not in p.read_text()
     assert set(raw) <= model.SETTINGS_KEYS
     again = Settings.load(p)
-    assert again.get("output") == "/out" and again.get("ctca_only") is False
-    assert again.spec().output == "/out"
+    assert again.get("match_on") == "folder" and again.get("ctca_only") is False
+    assert again.spec().output == "" and again.spec().match_on == "folder"
 
 
 def test_settings_ignore_wrong_types_and_bad_json(tmp_path):
     p = tmp_path / "settings.json"
-    p.write_text('{"ctca_only": "yes", "output": 5, "mode": "manifest", "unknown": 1}')
+    p.write_text('{"ctca_only": "yes", "sheet": 5, "mode": "manifest", "unknown": 1}')
     s = Settings.load(p)
-    assert s.get("ctca_only") is True and s.get("output") == ""
+    assert s.get("ctca_only") is True and s.get("sheet") == ""
     p.write_text("not json")
     assert Settings.load(p).get("mode") == "manifest"
 
 
 def test_spec_to_settings_skips_study_id(tmp_path):
     s = Settings.load(tmp_path / "s.json")
-    model.spec_to_settings(JobSpec(mode="single", output="/o", input="/i", study_id="X"), s)
-    assert s.get("output") == "/o" and "study_id" not in s.values
+    model.spec_to_settings(JobSpec(mode="single", output="/o", input="/i", study_id="X", match_on="folder"), s)
+    assert s.get("match_on") == "folder" and "study_id" not in s.values and "output" not in s.values
 
 
 def test_external_viewer_command(monkeypatch):

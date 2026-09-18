@@ -32,8 +32,9 @@ the app (macOS) or use Add/Remove Programs (Windows).
 ## Home
 
 The first tab. Three buttons: **Start** (the guided flow), **Try it on two sample patients**, and
-**Viewer**. "Where you left off" shows the last output folder, how many patients are done and whether
-the check passed, with **Continue**, **Share safely** and **Open output folder**.
+**Viewer**. "This session" shows the output folder in use, how many patients are done and whether the
+check passed, with **Continue**, **Share safely** and **Open output folder**. The app opens clean each
+time; folders are not remembered between launches.
 
 ## The status strip
 
@@ -44,7 +45,7 @@ the output is not fully blinded.
 
 ## First time? Try the demo
 
-Help > **Try it on two sample patients** (also offered on first launch) runs the whole flow on built-in
+Home or Help > **Try it on two sample patients** runs the whole flow on built-in
 synthetic scans in about twenty seconds: preview, anonymise, check. Nothing real is involved and
 nothing outside the app's own folder is written.
 

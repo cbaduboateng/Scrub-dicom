@@ -18,8 +18,8 @@ anyone.
   does start a local HTTP server; since v0.2 it binds to `127.0.0.1` only and has Streamlit's usage
   telemetry switched off. It is not part of the packaged app.)
 - **Send telemetry, crash reports or usage statistics.** There is nothing to send to.
-- **Store patient identifiers in its own settings.** The app remembers the paths you chose and the
-  options you ticked, in `~/Library/Application Support/Scrub-DICOM/settings.json` (macOS) or
+- **Store patient identifiers or paths in its own settings.** The app remembers only the options you ticked
+  (never a folder path: folder names are often hospital numbers), in `~/Library/Application Support/Scrub-DICOM/settings.json` (macOS) or
   `%APPDATA%\Scrub-DICOM\settings.json` (Windows). The set of keys it may write is an allow-list
   (`SETTINGS_KEYS` in `scrubdicom/app/model.py`); verify "needles" (surnames, hospital numbers) are
   deliberately excluded and are forgotten when the window closes.
@@ -43,7 +43,7 @@ anyone.
 | `<out>/_logs/verify_*.txt` | PASS: file count and output path only. FAIL: quotes the offending values | PASS no; FAIL yes |
 | `<out>/_logs/uid_salt.txt` | the random salt for UID hashing | no. It cannot reverse a hash. Keep it with the output if re-runs must reproduce the same UIDs |
 | `<out>/<study>/.complete*` | a timestamp | no |
-| App settings file | paths and booleans | paths may contain a hospital number if you named folders that way; the file is per-user and not shared |
+| App settings file | options and booleans only; no paths | no |
 | The window and the app's own log lines | whatever the engine prints, including source folder names | shown to the operator only |
 
 The rule that follows: **the whole `_logs` folder is confidential, not only the LINKAGE file.** The

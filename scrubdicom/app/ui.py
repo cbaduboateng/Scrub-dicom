@@ -182,8 +182,6 @@ class App(tk.Tk):
         self.after(POLL_MS, self._poll)
         if selftest:
             self.after(500, self._selftest_walk)
-        elif offer_demo and not self.settings.get("first_run_done"):
-            self.after(700, self._first_run_offer)
 
     # ================================================================== construction
     def _make_vars(self) -> None:
@@ -191,19 +189,21 @@ class App(tk.Tk):
         sv = lambda k: tk.StringVar(value=str(s.get(k) or ""))
         bv = lambda k: tk.BooleanVar(value=bool(s.get(k)))
         self.v_mode = sv("mode")
-        self.v_output, self.v_manifest, self.v_remap, self.v_input = sv("output"), sv("manifest"), sv("remap"), sv("input")
+        # paths are deliberately not remembered between launches: the app opens clean, and no folder names
+        # (which are often hospital numbers) are ever written to the settings file
+        self.v_output, self.v_manifest, self.v_remap, self.v_input = tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar()
         self.v_study_id = tk.StringVar()
-        self.v_mapping, self.v_current_col, self.v_new_col, self.v_sheet = sv("mapping"), sv("current_col"), sv("new_col"), sv("sheet")
+        self.v_mapping, self.v_current_col, self.v_new_col, self.v_sheet = tk.StringVar(), sv("current_col"), sv("new_col"), sv("sheet")
         self.v_match_on = tk.StringVar(value=s.get("match_on") or "patientid")
         self.v_match_on_label = tk.StringVar(value=MATCH_ON_LABELS.get(self.v_match_on.get(), MATCH_ON_LABELS["patientid"]))
         self.v_match_on_label.trace_add("write", lambda *_: self.v_match_on.set(MATCH_ON_KEYS.get(self.v_match_on_label.get(), "patientid")))
-        self.v_series_pick = sv("series_pick")
+        self.v_series_pick = tk.StringVar()
         self.v_profile = sv("profile")
         self.v_profile_desc = tk.StringVar()
         self.v_profile_label = tk.StringVar()
         self.v_ctca, self.v_resume, self.v_keep_tech, self.v_flat = bv("ctca_only"), bv("resume"), bv("keep_technical"), bv("flat")
         self.v_verify_after, self.v_show_all = bv("verify_after_run"), bv("show_all_lines")
-        self.v_more = tk.BooleanVar(value=self.v_mode.get() == "mapping" or bool(s.get("remap")) or bool(s.get("series_pick")))
+        self.v_more = tk.BooleanVar(value=self.v_mode.get() == "mapping")
         self.v_needles = tk.StringVar()              # never persisted: these are identifiers
         self.v_series_filter = tk.StringVar(value="All")
         self.v_series_query = tk.StringVar()
@@ -306,7 +306,7 @@ class App(tk.Tk):
                                                 ("Viewer\nscans and headers", lambda: self._viewer("source"), tile))):
             ttk.Button(tiles, text=text, style=style, command=cmd).grid(row=0, column=i, sticky="ew", padx=(0 if i == 0 else 8, 0 if i == 2 else 8), ipady=38)
         self.v_home_recent = tk.StringVar(value="")
-        recent = ttk.LabelFrame(box, text="Where you left off", padding=(14, 8, 14, 12))
+        recent = ttk.LabelFrame(box, text="This session", padding=(14, 8, 14, 12))
         recent.grid(row=2, column=0, sticky="ew", pady=(36, 0))
         ttk.Label(recent, textvariable=self.v_home_recent, wraplength=COL - 40, justify="left").pack(anchor="w")
         rb = ttk.Frame(recent)
@@ -331,7 +331,7 @@ class App(tk.Tk):
         s = self._spec()
         src = Path(s.manifest).name if s.mode == "manifest" and s.manifest else (Path(s.input).name if s.input else "")
         if not out:
-            self.v_home_recent.set("Nothing yet. Press Start, or try the demo first.")
+            self.v_home_recent.set("No output folder chosen yet. Press Start, or try the demo.")
             self.b_home_continue.state(["disabled"])
             return
         done, partial = model.study_state(out) if out.is_dir() else ([], [])
@@ -1276,13 +1276,6 @@ class App(tk.Tk):
                                           "Keep the moved folder with the linkage information, away from the scans.")
 
     # ================================================================== demo and first run
-    def _first_run_offer(self) -> None:
-        self.settings.set("first_run_done", True)
-        self.settings.save()
-        if messagebox.askyesno("Welcome to Scrub-DICOM", "Try it on two sample patients?\n\nThe whole flow runs on built-in synthetic scans in about twenty seconds. No real data is involved, and nothing outside the app's own folder is written.",
-                               icon="question"):
-            self._run_demo()
-
     def _run_demo(self) -> None:
         if self._busy():
             return

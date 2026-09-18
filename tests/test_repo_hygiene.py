@@ -55,7 +55,7 @@ def test_no_secrets_or_real_identifiers_in_source():
             assert not nhs.search(text), f"NHS-number-shaped string in {p}"
 
 
-def test_settings_allowlist_has_no_identifier_fields():
+def test_settings_allowlist_has_no_identifier_or_path_fields():
     from scrubdicom.app.model import SETTINGS_KEYS
     for k in SETTINGS_KEYS:
-        assert not re.search(r"needle|patient|name|dob|salt|id$", k), f"settings must not persist {k}"
+        assert not re.search(r"needle|patient|name|dob|salt|id$|output|manifest|input|mapping|series_pick|remap", k), f"settings must not persist {k}"

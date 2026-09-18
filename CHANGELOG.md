@@ -11,7 +11,8 @@ Idiot-proofing pass, as prepared for a conference demo.
   Check failed, do not share.
 - Empty tabs say what to do next with one button; failures show a recovery card with one action (Resume after a
   drive loss, Open report after a failed check, Go to step 1 for missing folders).
-- Built-in demo: "Try it on two sample patients" runs the whole flow on synthetic scans; offered on first launch.
+- Built-in demo: "Try it on two sample patients" runs the whole flow on synthetic scans, from Home or Help.
+- The app opens clean: folder paths are no longer remembered between launches or written to the settings file.
   The frozen self-test runs the demo end to end, so a build that cannot complete the flow does not ship.
 - Rarely used ways and options (ID spreadsheet mode, drive path fix, already-analysed series, technical details)
   sit behind "More ways and options".

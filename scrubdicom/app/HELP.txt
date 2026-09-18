@@ -14,16 +14,16 @@ The four tabs are the four steps, in order: Anonymise, Check series, Verify outp
 The Dark / Light button in the header switches the look; it follows the system setting at first launch.
 
 HOME
-  Three buttons: Start (the guided flow), Try it on two sample patients, Viewer. "Where you left off" shows the
-  last output folder, how many patients are done and whether the check passed.
+  Three buttons: Start (the guided flow), Try it on two sample patients, Viewer. "This session" shows the output
+  folder in use, how many patients are done and whether the check passed.
 
 THE STATUS STRIP
   The coloured strip under the header is the one thing to watch: Not started; Anonymising n of N; Anonymised, not
   yet safe to hand over; Verified, safe to hand over; or Check failed, do not share. An orange line below it means
   the chosen profile retains something (sex, shifted dates...) and the output is not fully blinded.
 
-FIRST TIME?  Help > "Try it on two sample patients" runs the whole flow on built-in synthetic scans in about twenty
-  seconds. Nothing real is involved.
+FIRST TIME?  Home or Help > "Try it on two sample patients" runs the whole flow on built-in synthetic scans in
+  about twenty seconds. Nothing real is involved. The app opens clean each time: folders are not remembered.
 
 TAB 1  ANONYMISE
   Three steps, one screen each; Next is available when the step is complete. Hover any "?" for the detail of a
