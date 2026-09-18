@@ -23,6 +23,8 @@ POLL_MS = 250
 MONO = ("Menlo", 11) if sys.platform == "darwin" else (("Consolas", 10) if os.name == "nt" else ("TkFixedFont", 10))
 COLOURS = {"error": "#b42318", "warn": "#9a6700", "ok": "#1a7f37", "plain": None, "keep": "#1a7f37", "drop": "#6e7781", "check": "#9a6700", "block": "#b42318"}
 LEVEL_MARK = {"ok": "\u2713", "warn": "!", "block": "\u2715"}
+MATCH_ON_LABELS = {"patientid": "Patient ID in the scans", "folder": "sub-folder name"}
+MATCH_ON_KEYS = {v: k for k, v in MATCH_ON_LABELS.items()}
 
 
 def open_path(p: Path) -> None:
@@ -53,7 +55,7 @@ class App(tk.Tk):
         self.skipped_hidden = 0
         self._out_refresh_id: str | None = None
         self.title(f"{APP_NAME} {APP_VERSION}")
-        self.minsize(1000, 700)
+        self.minsize(1000, 720)
         geo = self.settings.get("geometry")
         if geo:
             try:
@@ -84,6 +86,8 @@ class App(tk.Tk):
         self.v_study_id = tk.StringVar()
         self.v_mapping, self.v_current_col, self.v_new_col, self.v_sheet = sv("mapping"), sv("current_col"), sv("new_col"), sv("sheet")
         self.v_match_on = tk.StringVar(value=s.get("match_on") or "patientid")
+        self.v_match_on_label = tk.StringVar(value=MATCH_ON_LABELS.get(self.v_match_on.get(), MATCH_ON_LABELS["patientid"]))
+        self.v_match_on_label.trace_add("write", lambda *_: self.v_match_on.set(MATCH_ON_KEYS.get(self.v_match_on_label.get(), "patientid")))
         self.v_series_pick = sv("series_pick")
         self.v_ctca, self.v_resume, self.v_keep_tech, self.v_flat = bv("ctca_only"), bv("resume"), bv("keep_technical"), bv("flat")
         self.v_verify_after, self.v_show_all = bv("verify_after_run"), bv("show_all_lines")
@@ -104,16 +108,16 @@ class App(tk.Tk):
         f.add_command(label="Quit", command=self._on_close, accelerator="Cmd+Q" if sys.platform == "darwin" else "Alt+F4")
         m.add_cascade(label="File", menu=f)
         r = tk.Menu(m, tearoff=False)
-        r.add_command(label="Dry run", command=lambda: self._start_run(dry_run=True))
-        r.add_command(label="Start run", command=self._start_run)
+        r.add_command(label="Preview (writes nothing)", command=lambda: self._start_run(dry_run=True))
+        r.add_command(label="Anonymise", command=self._start_run)
         r.add_command(label="Stop", command=self._stop)
-        r.add_command(label="Verify output", command=self._start_verify)
+        r.add_command(label="Verify the output", command=self._start_verify)
         r.add_separator()
-        r.add_command(label="Audit slice thickness", command=lambda: self._start_thick(fix=False))
-        r.add_command(label="Audit and clear thick studies...", command=lambda: self._start_thick(fix=True))
+        r.add_command(label="List patients whose kept slices are too thick", command=lambda: self._start_thick(fix=False))
+        r.add_command(label="Remove those patients from the output so they are redone...", command=lambda: self._start_thick(fix=True))
         r.add_separator()
-        r.add_command(label="Show run command", command=self._show_command)
-        m.add_cascade(label="Run", menu=r)
+        r.add_command(label="Show the command this will run", command=self._show_command)
+        m.add_cascade(label="Actions", menu=r)
         h = tk.Menu(m, tearoff=False)
         h.add_command(label="User guide", command=lambda: self.nb.select(self.tab_help))
         h.add_command(label="About", command=lambda: messagebox.showinfo(f"About {APP_NAME}", model.about_text()))
@@ -124,8 +128,8 @@ class App(tk.Tk):
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, padx=8, pady=(8, 0))
         self.tab_run, self.tab_series, self.tab_verify, self.tab_share, self.tab_help = (ttk.Frame(self.nb, padding=10) for _ in range(5))
-        for tab, name in ((self.tab_run, "Run"), (self.tab_series, "Series decisions"), (self.tab_verify, "Verify"),
-                          (self.tab_share, "Logs & sharing"), (self.tab_help, "Help")):
+        for tab, name in ((self.tab_run, "1  Anonymise"), (self.tab_series, "2  Check series"), (self.tab_verify, "3  Verify output"),
+                          (self.tab_share, "4  Share safely"), (self.tab_help, "Help")):
             self.nb.add(tab, text=name)
         self._build_run_tab()
         self._build_series_tab()
@@ -161,7 +165,7 @@ class App(tk.Tk):
         t.columnconfigure(0, weight=1)
         t.rowconfigure(5, weight=1)
 
-        inp = ttk.LabelFrame(t, text="Input: how studies get their IDs", padding=8)
+        inp = ttk.LabelFrame(t, text="Step 1  Where the scans are, and what each patient will be called", padding=8)
         inp.grid(row=0, column=0, sticky="ew")
         inp.columnconfigure(1, weight=1)
         for i, mode in enumerate(model.MODES):
@@ -173,53 +177,52 @@ class App(tk.Tk):
         fields.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(6, 0))
         fields.columnconfigure(1, weight=1)
         csv_t = [("CSV files", "*.csv"), ("All files", "*")]
-        self.rows_manifest = self._path_row(fields, 0, "Manifest CSV", self.v_manifest, "file", "columns: source_folder, study_id", csv_t)
-        self.rows_remap = self._path_row(fields, 1, "Path remap (optional)", self.v_remap, None, "OLD=NEW prefix, e.g. /Volumes/Drive=E:\\")
-        self.rows_input = self._path_row(fields, 2, "Input folder", self.v_input, "dir", "searched recursively")
-        self.rows_study_id = self._path_row(fields, 3, "Study ID", self.v_study_id, None, "applied to every file")
-        self.rows_mapping = self._path_row(fields, 4, "Mapping file", self.v_mapping, "file", "CSV/XLSX: current ID -> study ID",
+        self.rows_manifest = self._path_row(fields, 0, "Patient list (CSV)", self.v_manifest, "file", "two columns: source_folder, study_id (new ID)", csv_t)
+        self.rows_remap = self._path_row(fields, 1, "Drive path fix (optional)", self.v_remap, None, "list written on another computer? e.g. /Volumes/Drive=E:\\")
+        self.rows_input = self._path_row(fields, 2, "Scans folder", self.v_input, "dir", "all sub-folders are searched")
+        self.rows_study_id = self._path_row(fields, 3, "New ID for this patient", self.v_study_id, None, "letters, digits, - _ . only")
+        self.rows_mapping = self._path_row(fields, 4, "ID spreadsheet", self.v_mapping, "file", "CSV or Excel: old ID -> new ID",
                                            [("Spreadsheets", "*.csv *.xlsx *.xlsm"), ("All files", "*")])
         cols = ttk.Frame(fields)
         cols.grid(row=5, column=1, columnspan=3, sticky="w", pady=3)
-        lbl = ttk.Label(fields, text="Mapping columns")
+        lbl = ttk.Label(fields, text="Spreadsheet columns")
         lbl.grid(row=5, column=0, sticky="w", padx=(0, 8), pady=3)
         self.rows_cols = [lbl, cols]
-        for i, (text, var, width) in enumerate((("current ID", self.v_current_col, 12), ("study ID", self.v_new_col, 12), ("sheet", self.v_sheet, 8))):
+        for i, (text, var, width) in enumerate((("old ID", self.v_current_col, 12), ("new ID", self.v_new_col, 12), ("sheet", self.v_sheet, 8))):
             ttk.Label(cols, text=text).grid(row=0, column=2 * i, sticky="w", padx=(0 if i == 0 else 12, 4))
             ttk.Entry(cols, textvariable=var, width=width).grid(row=0, column=2 * i + 1, sticky="w")
-        ttk.Label(cols, text="match on").grid(row=0, column=6, sticky="w", padx=(12, 4))
-        ttk.Combobox(cols, textvariable=self.v_match_on, values=("patientid", "folder"), state="readonly", width=9).grid(row=0, column=7, sticky="w")
-        ttk.Label(cols, text="(blank = auto)", foreground="#6e7781").grid(row=0, column=8, sticky="w", padx=(8, 0))
-        self.rows_picks = self._path_row(fields, 6, "Series-pick CSV (optional)", self.v_series_pick, "file", "study_id, series_uid, series_description", csv_t)
+        ttk.Label(cols, text="old ID is the").grid(row=0, column=6, sticky="w", padx=(12, 4))
+        ttk.Combobox(cols, textvariable=self.v_match_on_label, values=tuple(MATCH_ON_LABELS.values()), state="readonly", width=19).grid(row=0, column=7, sticky="w")
+        self.rows_picks = self._path_row(fields, 6, "Already-analysed series (optional)", self.v_series_pick, "file", "CSV: study_id, series_uid, series_description", csv_t)
 
-        outf = ttk.LabelFrame(t, text="Output", padding=8)
+        outf = ttk.LabelFrame(t, text="Step 2  Where the anonymised copies go", padding=8)
         outf.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         outf.columnconfigure(1, weight=1)
-        self._path_row(outf, 0, "Output folder", self.v_output, "dir")
+        self._path_row(outf, 0, "Output folder", self.v_output, "dir", "a different drive, or at least outside the scans")
         ttk.Button(outf, text="Open", command=lambda: self._open(self._out())).grid(row=0, column=3, padx=(6, 0))
         ttk.Label(outf, textvariable=self.v_out_status, foreground="#6e7781").grid(row=1, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
-        opt = ttk.LabelFrame(t, text="Options", padding=8)
+        opt = ttk.LabelFrame(t, text="Step 3  Options", padding=8)
         opt.grid(row=2, column=0, sticky="ew", pady=(8, 0))
-        self.cb_ctca = ttk.Checkbutton(opt, text="Keep only the coronary CTA series", variable=self.v_ctca)
-        self.cb_resume = ttk.Checkbutton(opt, text="Resume: skip completed studies, redo half-finished ones", variable=self.v_resume)
-        self.cb_ctca.grid(row=0, column=0, sticky="w", padx=(0, 18))
-        self.cb_resume.grid(row=0, column=1, sticky="w", padx=(0, 18))
-        ttk.Checkbutton(opt, text="Keep vendor technical fields (kernel, scan options)", variable=self.v_keep_tech).grid(row=1, column=0, sticky="w", padx=(0, 18))
-        ttk.Checkbutton(opt, text="Flat output (no per-series sub-folders)", variable=self.v_flat).grid(row=1, column=1, sticky="w", padx=(0, 18))
-        ttk.Checkbutton(opt, text="Verify after run", variable=self.v_verify_after).grid(row=0, column=2, sticky="w")
+        self.cb_ctca = ttk.Checkbutton(opt, text="Keep only the coronary CT angiogram series", variable=self.v_ctca)
+        self.cb_resume = ttk.Checkbutton(opt, text="Skip patients already done (resume)", variable=self.v_resume)
+        self.cb_ctca.grid(row=0, column=0, sticky="w", padx=(0, 24))
+        self.cb_resume.grid(row=0, column=1, sticky="w")
+        ttk.Checkbutton(opt, text="Keep scanner technical details (kernel, scan options)", variable=self.v_keep_tech).grid(row=1, column=0, sticky="w", padx=(0, 24))
+        ttk.Checkbutton(opt, text="One folder per patient, no series sub-folders", variable=self.v_flat).grid(row=1, column=1, sticky="w")
+        ttk.Checkbutton(opt, text="Check the output automatically when done", variable=self.v_verify_after).grid(row=2, column=0, sticky="w", padx=(0, 24))
         self.lbl_manifest_only = ttk.Label(opt, text="", foreground="#6e7781")
-        self.lbl_manifest_only.grid(row=2, column=0, columnspan=3, sticky="w")
+        self.lbl_manifest_only.grid(row=2, column=1, sticky="w")
 
         btns = ttk.Frame(t)
         btns.grid(row=3, column=0, sticky="ew", pady=(10, 0))
-        self.b_dry = ttk.Button(btns, text="Dry run", command=lambda: self._start_run(dry_run=True))
-        self.b_start = ttk.Button(btns, text="Start run", command=self._start_run)
+        self.b_dry = ttk.Button(btns, text="Preview (writes nothing)", command=lambda: self._start_run(dry_run=True))
+        self.b_start = ttk.Button(btns, text="Anonymise", command=self._start_run)
         self.b_stop = ttk.Button(btns, text="Stop", command=self._stop, state="disabled")
         self.b_dry.pack(side="left")
         self.b_start.pack(side="left", padx=(8, 0))
         self.b_stop.pack(side="left", padx=(8, 0))
-        ttk.Button(btns, text="Show command", command=self._show_command).pack(side="right")
+        ttk.Button(btns, text="Show the command this will run", command=self._show_command).pack(side="right")
 
         prog = ttk.Frame(t)
         prog.grid(row=4, column=0, sticky="ew", pady=(10, 4))
@@ -243,7 +246,7 @@ class App(tk.Tk):
                 self.log.tag_configure(tag, foreground=colour)
         under = ttk.Frame(logf)
         under.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(4, 0))
-        ttk.Checkbutton(under, text="Show lines for studies skipped by Resume", variable=self.v_show_all).pack(side="left")
+        ttk.Checkbutton(under, text="Also show patients that were skipped as already done", variable=self.v_show_all).pack(side="left")
         ttk.Button(under, text="Open log file", command=lambda: self._open(self.log_path)).pack(side="right")
         ttk.Button(under, text="Copy log", command=self._copy_log).pack(side="right", padx=(0, 8))
 
@@ -261,7 +264,7 @@ class App(tk.Tk):
         manifest = mode == "manifest"
         for cb in (self.cb_ctca, self.cb_resume):
             cb.state(["!disabled"] if manifest else ["disabled"])
-        self.lbl_manifest_only.configure(text="" if manifest else "Coronary-only and Resume apply to manifest runs only.")
+        self.lbl_manifest_only.configure(text="" if manifest else "'Coronary only' and 'Skip patients already done' work with a patient list only.")
         self.lbl_mode.configure(text=model.MODE_HELP.get(mode, ""))
 
     # ------------------------------------------------------------------ Series tab
@@ -303,14 +306,14 @@ class App(tk.Tk):
         ttk.Label(top, text="Show").pack(side="left")
         for f in model.SERIES_FILTERS:
             ttk.Radiobutton(top, text=f, value=f, variable=self.v_series_filter, command=self._refresh_series).pack(side="left", padx=(8, 0))
-        ttk.Label(top, text="Study ID contains").pack(side="left", padx=(24, 6))
+        ttk.Label(top, text="New ID contains").pack(side="left", padx=(24, 6))
         e = ttk.Entry(top, textvariable=self.v_series_query, width=18)
         e.pack(side="left")
         e.bind("<KeyRelease>", lambda _e: self._refresh_series())
         ttk.Button(top, text="Export CSV...", command=self._export_series).pack(side="right")
         ttk.Button(top, text="Refresh", command=self._refresh_series).pack(side="right", padx=(0, 8))
-        self.tv_series = self._tree(t, [("study_id", "Study", 100), ("series_number", "Series", 55), ("original_description", "Original description", 220),
-                                        ("images", "Images", 60), ("decision", "Decision", 70), ("reason", "Reason", 300), ("run", "Run", 110)])
+        self.tv_series = self._tree(t, [("study_id", "New ID", 100), ("series_number", "Series", 55), ("original_description", "Original series name", 220),
+                                        ("images", "Images", 60), ("decision", "Decision", 70), ("reason", "Why", 300), ("run", "Run", 110)])
         self.lbl_series = ttk.Label(t, text="", foreground="#6e7781")
         self.lbl_series.pack(anchor="w", pady=(6, 0))
         self.series_rows: list[dict] = []
@@ -320,25 +323,25 @@ class App(tk.Tk):
         t = self.tab_verify
         top = ttk.Frame(t)
         top.pack(fill="x")
-        ttk.Label(top, text="Extra words that must not appear (surnames, hospital numbers; comma-separated; not remembered between sessions)", wraplength=900).pack(anchor="w")
+        ttk.Label(top, text="Words that must not appear anywhere in the output, e.g. consultant surnames, hospital numbers (comma-separated; forgotten when you close the app)", wraplength=900).pack(anchor="w")
         row = ttk.Frame(top)
         row.pack(fill="x", pady=(4, 8))
         ttk.Entry(row, textvariable=self.v_needles).pack(side="left", fill="x", expand=True)
-        self.b_verify = ttk.Button(row, text="Run verify", command=self._start_verify)
+        self.b_verify = ttk.Button(row, text="Check the output now", command=self._start_verify)
         self.b_verify.pack(side="left", padx=(8, 0))
         ttk.Button(row, text="Open report", command=lambda: self._open(model.verify_status(self._logs())[1] if self._logs() else None)).pack(side="left", padx=(8, 0))
-        self.lbl_verify = ttk.Label(t, text="No verify report yet.", font=("TkDefaultFont", 14, "bold"))
+        self.lbl_verify = ttk.Label(t, text="Not checked yet.", font=("TkDefaultFont", 14, "bold"))
         self.lbl_verify.pack(anchor="w", pady=(0, 6))
         self.txt_verify = tk.Text(t, font=MONO, wrap="none", height=14, state="disabled")
         self.txt_verify.pack(fill="both", expand=True)
-        ttk.Label(t, text="Per-study summary (latest run)").pack(anchor="w", pady=(10, 4))
-        self.tv_summary = self._tree(t, [("study_id", "Study", 100), ("status", "Status", 110), ("files", "Files", 55), ("series", "Series", 55),
-                                         ("review_files", "To _review", 75), ("errors", "Errors", 55), ("source_folder", "Source folder (confidential)", 300)], height=8)
+        ttk.Label(t, text="Per-patient summary of the latest run").pack(anchor="w", pady=(10, 4))
+        self.tv_summary = self._tree(t, [("study_id", "New ID", 100), ("status", "Status", 110), ("files", "Files", 55), ("series", "Series", 55),
+                                         ("review_files", "To _review", 75), ("errors", "Errors", 55), ("source_folder", "Original folder (confidential)", 300)], height=8)
 
     # ------------------------------------------------------------------ Share tab
     def _build_share_tab(self) -> None:
         t = self.tab_share
-        ttk.Label(t, text="Ready to share?", font=("TkDefaultFont", 13, "bold")).pack(anchor="w")
+        ttk.Label(t, text="Is the output folder safe to hand over?", font=("TkDefaultFont", 13, "bold")).pack(anchor="w")
         ttk.Label(t, text="Everything in _logs is confidential, not only the LINKAGE file: the per-file and per-study CSVs and the run logs "
                           "record the original folder paths. Move them out before the output folder leaves this computer.",
                   wraplength=900, foreground="#6e7781").pack(anchor="w", pady=(2, 6))
@@ -346,10 +349,10 @@ class App(tk.Tk):
         row = ttk.Frame(t)
         row.pack(fill="x", pady=8)
         ttk.Button(row, text="Refresh", command=self._refresh_share).pack(side="left")
-        ttk.Button(row, text="Move confidential logs out...", command=self._move_logs).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text="Open _logs folder", command=lambda: self._open(self._logs())).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text="Open _review folder", command=lambda: self._open(self._out() / "_review" if self._out() else None)).pack(side="left", padx=(8, 0))
-        ttk.Label(t, text="Files in _logs").pack(anchor="w", pady=(6, 4))
+        ttk.Button(row, text="Move the patient-linking logs out...", command=self._move_logs).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="Open the logs folder", command=lambda: self._open(self._logs())).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="Open quarantined files (_review)", command=lambda: self._open(self._out() / "_review" if self._out() else None)).pack(side="left", padx=(8, 0))
+        ttk.Label(t, text="Files in the logs folder (_logs)").pack(anchor="w", pady=(6, 4))
         self.tv_logs = self._tree(t, [("name", "File", 300), ("size", "Size", 70), ("modified", "Modified", 130), ("note", "", 320)], height=8)
 
     # ------------------------------------------------------------------ Help tab
@@ -457,9 +460,9 @@ class App(tk.Tk):
         cmd = spec.command()
         if not dry_run:
             msg = (f"Output: {spec.output}\n\nOriginals are never modified. The engine will run as:\n\n{shown_command(cmd)}\n\nStart?")
-            if not messagebox.askokcancel("Start run", msg):
+            if not messagebox.askokcancel("Anonymise", msg):
                 return
-        self._start_job("dry" if dry_run else "run", ["run", *spec.run_args()], None if dry_run else "run", "Dry run" if dry_run else "Run")
+        self._start_job("dry" if dry_run else "run", ["run", *spec.run_args()], None if dry_run else "run", "Preview" if dry_run else "Anonymisation")
 
     def _start_verify(self) -> None:
         out = self._out()
@@ -467,7 +470,7 @@ class App(tk.Tk):
             messagebox.showerror(APP_NAME, "Choose an existing output folder first.")
             return
         args = ["verify", *model.verify_args(str(out), model.split_needles(self.v_needles.get()), self.v_keep_tech.get())]
-        self._start_job("verify", args, "verify", "Verify")
+        self._start_job("verify", args, "verify", "Output check")
 
     def _start_thick(self, fix: bool) -> None:
         out = self._out()
@@ -484,7 +487,7 @@ class App(tk.Tk):
     def _stop(self) -> None:
         if not (self.proc and self.proc.running):
             return
-        if self.job == "run" and not messagebox.askyesno("Stop the run?", "The study in progress is left unfinished and will be redone on the next run with Resume ticked.\n\nStop now?"):
+        if self.job == "run" and not messagebox.askyesno("Stop?", "The patient in progress is left unfinished and will be redone next time with 'Skip patients already done' ticked.\n\nStop now?"):
             return
         self.proc.stop()
         self._append_log("** stopped by user **", "warn")
@@ -495,7 +498,7 @@ class App(tk.Tk):
         secs = self.proc.elapsed()
         took = f"{secs / 60:.1f} min" if secs >= 90 else f"{secs:.0f} s"
         job, self.job = self.job, None
-        titles = {"run": "Run", "dry": "Dry run", "verify": "Verify", "thick": "Thickness audit"}
+        titles = {"run": "Anonymisation", "dry": "Preview", "verify": "Output check", "thick": "Thickness audit"}
         title = titles.get(job or "", "Job")
         if rc == 0:
             self.v_progress_text.set(f"{title} finished in {took}")
@@ -509,7 +512,7 @@ class App(tk.Tk):
             self.v_progress_text.set(f"{title} finished with problems (exit code {rc}) after {took}; read the log")
             self.v_status.set(f"{title}: problems, read the log")
             if job == "verify":
-                messagebox.showwarning("Verify", "Verify found residual identifiers. Do not share the output until it passes. See the Verify tab.")
+                messagebox.showwarning("Output check failed", "Identifiers were found in the output. Do not share it until the check passes. See the 'Verify output' tab.")
         self._set_running(False)
         self._refresh_all()
         if self.skipped_hidden and not self.v_show_all.get():
@@ -564,7 +567,7 @@ class App(tk.Tk):
         text = shown_command(spec.command())
         if problems:
             text += "\n\nNot runnable yet:\n- " + "\n- ".join(problems)
-        messagebox.showinfo("Run command", text)
+        messagebox.showinfo("Command", text)
 
     # ================================================================== refresh
     def _refresh_all(self) -> None:
@@ -581,16 +584,16 @@ class App(tk.Tk):
     def _refresh_output_status(self) -> None:
         out = self._out()
         if not out:
-            self.v_out_status.set("Choose an output folder. It will hold one folder per study ID, plus _logs and _review.")
+            self.v_out_status.set("Choose an output folder. It will hold one folder per patient (named by new ID), plus _logs and _review.")
             return
         if not out.is_dir():
             self.v_out_status.set("Folder does not exist yet; it will be created on the first run.")
             return
         done, partial = model.study_state(out)
         n = model.manifest_count(self.v_manifest.get()) if self.v_mode.get() == "manifest" else None
-        s = f"Studies complete: {len(done)}   ·   half-finished (will be redone): {len(partial)}"
+        s = f"Patients done: {len(done)}   ·   half-finished (will be redone): {len(partial)}"
         if n is not None:
-            s += f"   ·   rows in manifest: {n}"
+            s += f"   ·   patients in the list: {n}"
         self.v_out_status.set(s)
 
     def _refresh_series(self) -> None:
@@ -607,7 +610,7 @@ class App(tk.Tk):
             self.lbl_series.configure(text=f"{len(rows)} shown of {len(self.series_rows)} series across {c['studies']} studies: "
                                            f"{c['kept']} kept, {c['dropped']} dropped, {c['check']} need a look")
         else:
-            self.lbl_series.configure(text="No series decisions yet. Run a manifest with 'Keep only the coronary CTA series' to produce them.")
+            self.lbl_series.configure(text="Nothing to show yet. Anonymise a patient list with 'Keep only the coronary CT angiogram series' ticked.")
 
     def _refresh_verify(self) -> None:
         logs = self._logs()
@@ -617,7 +620,7 @@ class App(tk.Tk):
         elif status == "FAIL":
             self.lbl_verify.configure(text=f"FAIL: residual identifiers found  ({rep.name})", foreground=COLOURS["error"])
         else:
-            self.lbl_verify.configure(text="No verify report yet.", foreground="")
+            self.lbl_verify.configure(text="Not checked yet.", foreground="")
         self.txt_verify.configure(state="normal")
         self.txt_verify.delete("1.0", "end")
         self.txt_verify.insert("1.0", txt[-20000:])

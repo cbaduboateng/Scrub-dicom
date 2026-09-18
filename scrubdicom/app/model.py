@@ -57,14 +57,16 @@ def settings_path() -> Path:
 
 MODES = ("manifest", "single", "mapping")
 MODE_LABELS = {
-    "manifest": "Cohort manifest CSV",
-    "single": "One patient folder",
-    "mapping": "Folder of patients + mapping file",
+    "manifest": "A list of patients (CSV)",
+    "single": "One patient",
+    "mapping": "A folder of patients + an ID spreadsheet",
 }
 MODE_HELP = {
-    "manifest": "A CSV with columns source_folder, study_id: one patient folder per row, anywhere on any drive. Supports Resume and coronary-only.",
-    "single": "Everything under one folder gets the study ID you type. Good for a single case.",
-    "mapping": "One folder holding a sub-folder per patient, plus a CSV/XLSX mapping the current ID (or folder name) to the study ID.",
+    "manifest": "A CSV with two columns: the folder holding each patient's scans, and the new ID to give them. Folders can be anywhere, on any drive. "
+                "This is the mode for a cohort: it can be stopped and resumed, and it can keep only the coronary series.",
+    "single": "One folder of scans, one new ID typed in. Good for a single case.",
+    "mapping": "One folder with a sub-folder per patient, plus a CSV or Excel sheet with an old-ID column and a new-ID column. "
+               "The old ID is either the Patient ID inside the scans or the sub-folder name.",
 }
 MANIFEST_ONLY_OPTIONS = ("ctca_only", "resume", "series_pick", "remap")
 

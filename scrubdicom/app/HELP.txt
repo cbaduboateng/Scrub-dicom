@@ -3,67 +3,79 @@ SCRUB-DICOM: HOW TO USE THIS APP
 What it does
   Takes a folder (or many folders) of cardiac CT exports and writes a separate, pseudonymised copy in which
   nothing in the header identifies the patient, the hospital or the scanner. The original scans are never
-  modified. Every output file is checked by "Verify" before you share anything.
+  touched. Every output file is checked before you share anything.
 
   This app never connects to the internet. It starts the same engine the command line uses, as a
   separate process, and shows you its output.
 
-Before you start
-  1. Put the original exports on a drive you can leave connected for hours.
-  2. Choose an OUTPUT folder on a different drive or at least outside the input folders. It will hold one
-     folder per study ID plus _logs and _review.
-  3. Decide how studies get their IDs (the "Input" section on the Run tab):
-       Cohort manifest        a CSV with two columns, source_folder and study_id, one patient folder per row.
-                              Best for a cohort scattered across drives and hospitals. Supports Resume and
-                              "coronary series only".
-       One patient folder     one folder, one study ID typed in.
-       Folder + mapping file  one folder holding many patient sub-folders and a CSV/XLSX mapping the current
-                              ID (hospital number or folder name) to the new study ID.
+The four tabs are the four steps, in order: Anonymise, Check series, Verify output, Share safely.
 
-Running
-  Dry run     scans and reports what would be written; writes nothing. Do this first.
-  Start run   shows the exact command, then runs it. The log updates live; the bar shows study n of N.
-  Stop        ends the run. The study in progress is left without a completion marker and is redone on the
-              next run with Resume ticked. Nothing is corrupted.
-  Options
-    Keep only the coronary CTA series   drops localisers, calcium score, chest recons, lung/sharp kernels,
-                                        MPRs and dose reports. Every decision is logged and shown on the
-                                        "Series decisions" tab.
-    Resume                              skip studies already marked complete; redo half-finished ones.
-    Keep vendor technical fields        keep convolution kernel / scan options. Off for a blinded read.
-    Flat output                         no per-series sub-folders.
-    Verify after run                    runs Verify automatically when the run finishes.
-  Series-pick CSV (optional)  study_id, series_uid, series_description: when a particular series has already
-                              been analysed and must be the one kept. A thick pick falls back to the thin
-                              coronary recon and the study is flagged CHECK.
-  Path remap                  only when a manifest written on a Mac is run from Windows (or the other way):
-                              /Volumes/Drive=E:\   rewrites every source_folder that starts with /Volumes/Drive.
+TAB 1  ANONYMISE
 
-Series decisions
-  One row per series per study: kept, dropped, or "Needs a look" (the engine fell back to a rule because the
-  header lacked contrast or cardiac-phase information, or a series-pick did not match). Filter, search by
-  study ID, export as CSV.
+  Step 1: where the scans are, and what each patient will be called. Three ways:
+    A list of patients (CSV)       Best for a cohort. A CSV with two columns: source_folder (the folder holding
+                                   that patient's scans, anywhere on any drive) and study_id (the new ID).
+                                   Can be stopped and resumed. Can keep only the coronary series.
+    One patient                    One folder of scans, one new ID typed in.
+    A folder of patients + an ID   One folder with a sub-folder per patient, plus a CSV or Excel sheet with an
+    spreadsheet                    old-ID column and a new-ID column. Say whether the old ID is the Patient ID
+                                   inside the scans or the sub-folder name. Column names are auto-detected;
+                                   fill them in only if the detection gets it wrong.
+    Already-analysed series        Optional CSV (study_id, series_uid, series_description) naming the series that
+                                   has already been analysed and must be the one kept. A thick pick falls back
+                                   to the thin coronary recon and the patient is flagged "needs a look".
+    Drive path fix                 Only when the patient list was written on another computer, e.g. a Mac list
+                                   run on Windows: /Volumes/Drive=E:\  rewrites every folder that starts with
+                                   /Volumes/Drive.
 
-Verify
+  Step 2: where the anonymised copies go. Use a different drive from the scans, or at least a folder outside
+  them. It will contain one folder per patient (named by new ID), plus _logs and _review.
+
+  Step 3: options.
+    Keep only the coronary CT angiogram series   drops scouts, calcium score, chest recons, lung/sharp kernels,
+                                                 MPRs and dose reports. Every decision is shown on tab 2.
+    Skip patients already done (resume)          leave on. Half-finished patients are redone.
+    Keep scanner technical details               kernel and scan options. Leave OFF for a blinded read: a kernel
+                                                 name identifies the scanner make.
+    One folder per patient                       no per-series sub-folders.
+    Check the output automatically when done     leave on.
+
+  Buttons
+    Preview (writes nothing)   scans and reports what would be written. Do this first with a new list.
+    Anonymise                  shows the exact command, then runs it. The bar shows patient n of N and the
+                               time left; the log updates live.
+    Stop                       ends the run cleanly. The patient in progress is redone next time.
+    Show the command...        the command line for the current settings, so a colleague can reproduce the
+                               run from a terminal.
+
+TAB 2  CHECK SERIES
+  One row per series per patient: kept, dropped, or "needs a look" (the engine used a fallback rule because
+  the header lacked contrast or cardiac-phase information, or an already-analysed pick did not match). Look at
+  those. Filter, search by new ID, export as CSV.
+
+TAB 3  VERIFY OUTPUT
   Re-opens every output file and fails on any private tag, real date, original UID, vendor or institution
-  text, person name, or any extra word you type as a "needle" (a consultant surname, a hospital number). The
-  linkage logs' original IDs are used as needles automatically. Needles are not remembered between sessions.
+  text, person name, or any extra word you type: consultant surnames, the hospital's ODS code, anything
+  specific to the cohort, separated by commas. The linking logs' original IDs are used automatically. The
+  words you type are forgotten when you close the app. Do not share output that has not passed.
 
-Logs & sharing
-  The whole _logs folder is confidential, not only the LINKAGE file: the per-file and per-study CSVs and the
-  run logs record the original folder paths. "Move confidential logs out" moves everything except
-  uid_salt.txt (needed so a re-run produces the same UIDs) to a folder you choose outside the output tree.
-  "Ready to share?" lists what still stands between the output folder and a reader.
+TAB 4  SHARE SAFELY
+  The whole _logs folder is confidential, not just the LINKAGE file: the per-file and per-patient CSVs and
+  the run logs record the original folder paths, and folders are usually named by hospital number.
+  "Move the patient-linking logs out" moves everything except uid_salt.txt (needed so a re-run produces the
+  same UIDs) and passed check reports to a folder you choose outside the output tree. Keep that folder with
+  the linkage information, away from the scans. "Open quarantined files" shows _review: secondary captures,
+  reports and PDFs whose headers are clean but whose pixels may carry burned-in text. Look before sharing.
 
-Tools menu
-  Audit slice thickness          lists finished studies whose kept series are thicker than the rule allows.
-  Audit and clear thick studies  deletes those study folders from the OUTPUT tree so the next Resume run
-                                 redoes them. Originals are not touched. You are asked to confirm.
+ACTIONS MENU
+  List patients whose kept slices are too thick      the slice rule is 0.8 mm (0.75 mm and thinner are kept).
+  Remove those patients from the output so they      deletes their folders from the OUTPUT only; the next run
+  are redone                                         with "Skip patients already done" redoes them. Asks first.
 
-If the drive disconnects
-  The run stops by itself. Reconnect the drive, tick Resume, Start run.
+IF THE DRIVE DISCONNECTS
+  The run stops by itself. Reconnect the drive, tick "Skip patients already done", click Anonymise.
 
-If nothing happens for minutes on one file
+IF NOTHING HAPPENS FOR MINUTES ON ONE FILE
   The log names the file. A failing drive is hanging on it. Stop, add the full path of that file to a
-  skip_files.txt next to the manifest, and run again with Resume. That study is then flagged CHECK because it
-  is missing a slice.
+  skip_files.txt next to the patient list, and run again. That patient is then flagged "needs a look" because
+  a slice is missing.

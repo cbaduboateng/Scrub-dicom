@@ -24,102 +24,103 @@ For the person running the anonymisation. No Python, no terminal. If you are the
 The app makes no changes to your system and never connects to the internet. To uninstall, delete
 the app (macOS) or use Add/Remove Programs (Windows).
 
-## The five tabs
+## The four steps
 
-### Run
+The tabs are numbered in the order you use them.
 
-Three ways to tell the app which study ID each patient gets:
+### 1  Anonymise
+
+**Step 1: where the scans are, and what each patient will be called.**
 
 | Choose | When |
 |---|---|
-| **Cohort manifest CSV** | Most cohorts. A CSV with two columns, `source_folder` and `study_id`, one patient folder per row. Folders can be on different drives. Supports **Resume** and **coronary series only**. |
-| **One patient folder** | A single case. Type the study ID. |
-| **Folder of patients + mapping file** | One folder with a sub-folder per patient and a spreadsheet mapping the current ID (hospital number, or the folder name) to the study ID. |
+| **A list of patients (CSV)** | Most cohorts. A CSV with two columns, `source_folder` (the folder holding that patient's scans) and `study_id` (the new ID). Folders can be on different drives. Can be stopped and resumed, and can keep only the coronary series. |
+| **One patient** | A single case. Type the new ID. |
+| **A folder of patients + an ID spreadsheet** | One folder with a sub-folder per patient and a CSV or Excel sheet with an old-ID column and a new-ID column. Say whether the old ID is the Patient ID inside the scans or the sub-folder name. |
 
-Then choose the **Output folder**. Put it on a different drive from the scans, or at least outside
-them. It will contain one folder per study ID, plus `_logs` and `_review`.
+**Step 2: where the anonymised copies go.** A different drive from the scans, or at least a
+folder outside them. It will contain one folder per patient, named by new ID, plus `_logs` and
+`_review`.
 
-Options:
+**Step 3: options.**
 
-- **Keep only the coronary CTA series** (on by default): drops localisers, calcium score runs, chest
-  recons, lung/sharp kernels, MPRs and dose reports. Every decision is shown on the next tab.
-- **Resume**: skip studies already completed; redo half-finished ones. Leave it on.
-- **Keep vendor technical fields**: keeps convolution kernel and scan options. Off for a blinded
-  read, because a kernel name identifies the scanner make.
-- **Flat output**: no per-series sub-folders.
-- **Verify after run**: runs the check automatically when the run finishes. Leave it on.
+- **Keep only the coronary CT angiogram series** (on by default): drops scouts, calcium score runs,
+  chest recons, lung/sharp kernels, MPRs and dose reports. Every decision is shown on tab 2.
+- **Skip patients already done (resume)**: leave on. Half-finished patients are redone.
+- **Keep scanner technical details**: kernel and scan options. Leave off for a blinded read, because
+  a kernel name identifies the scanner make.
+- **One folder per patient, no series sub-folders**.
+- **Check the output automatically when done**: leave on.
 
 Buttons:
 
-- **Dry run** scans and reports what would be written, and writes nothing. Do this first with a
-  new manifest.
-- **Start run** shows you the exact command it is about to run, then runs it. The bar shows
-  "Study n of N" with an estimate of time left; the log updates live.
-- **Stop** ends the run cleanly. The study in progress is redone on the next run with Resume on.
-- **Show command** displays the command line for the current settings, so a colleague can reproduce
-  the run from a terminal.
+- **Preview (writes nothing)**: scans and reports what would be written. Do this first with a new
+  list.
+- **Anonymise**: shows you the exact command it is about to run, then runs it. The bar shows
+  "Patient n of N" with an estimate of time left; the log updates live.
+- **Stop**: ends the run cleanly. The patient in progress is redone next time.
+- **Show the command this will run**: so a colleague can reproduce the run from a terminal.
 
-The computer is kept awake for the length of the run. You can close the laptop lid on a Mac only if
-it is plugged in; better to leave it open.
+The computer is kept awake for the length of the run. Leave a laptop open and plugged in.
 
-### Series decisions
+### 2  Check series
 
-One row per series per study, from the coronary-only rule: **kept**, **dropped**, or **needs a
-look**. "Needs a look" means the engine used a fallback rule (no contrast agent or cardiac phase in
-the header, or a series-pick that did not match) and a human should confirm the right series was
-kept. Filter, search by study ID, and export as CSV for a colleague.
+One row per series per patient: **kept**, **dropped**, or **needs a look**. "Needs a look" means the
+engine used a fallback rule (no contrast agent or cardiac phase in the header, or an
+already-analysed pick that did not match) and a human should confirm the right series was kept.
+Filter, search by new ID, and export as CSV for a colleague.
 
-### Verify
+### 3  Verify output
 
 Re-opens every output file and fails on any private tag, real date, original UID, vendor or
 institution text, person name, or any extra word you type. Type consultant surnames, the hospital's
-ODS code, anything specific to the cohort, separated by commas. These words are not remembered
-after you close the app. The result is PASS or FAIL with the exact file and tag for each finding.
+ODS code, anything specific to the cohort, separated by commas. These words are forgotten when you
+close the app. The result is PASS or FAIL with the exact file and tag for each finding.
 
 **Do not share output that has not passed.**
 
-### Logs & sharing
+### 4  Share safely
 
-The `_logs` folder is confidential, not just the LINKAGE file. The per-file and per-study CSVs and
+The `_logs` folder is confidential, not just the LINKAGE file. The per-file and per-patient CSVs and
 the run logs all record the original folder paths, and folders are usually named by hospital
 number.
 
-- **Ready to share?** lists what still stands between the output folder and a reader: verify status,
-  half-finished studies, quarantined files in `_review`, linkage or other confidential logs still
-  inside the tree.
-- **Move confidential logs out** moves everything except `uid_salt.txt` (needed so a re-run
-  produces the same UIDs) and PASS verify reports to a folder you choose outside the output tree.
+- **Is the output folder safe to hand over?** lists what still stands between the output folder and
+  a reader: check status, half-finished patients, quarantined files in `_review`, linking or other
+  confidential logs still inside the tree.
+- **Move the patient-linking logs out** moves everything except `uid_salt.txt` (needed so a re-run
+  produces the same UIDs) and passed check reports to a folder you choose outside the output tree.
   Keep that folder with the linkage information, on an encrypted drive, away from the scans.
-- **Open _review folder**: look at every file there before deciding whether to share it. They are
-  secondary captures, reports and PDFs whose headers are clean but whose pixels may carry burned-in
-  text. The safe default is to delete them from what you share.
+- **Open quarantined files (_review)**: look at every file there before deciding whether to share it.
+  They are secondary captures, reports and PDFs whose headers are clean but whose pixels may carry
+  burned-in text. The safe default is to delete them from what you share.
 
 ### Help
 
-This guide, in short form, plus the version and licence.
+This guide in short form, plus the version and licence.
 
-## Tools menu (under Run)
+## Actions menu
 
-- **Audit slice thickness** lists finished studies whose kept series are thicker than the rule
-  allows (0.8 mm, i.e. 0.75 mm and thinner are kept).
-- **Audit and clear thick studies** deletes those study folders from the *output* tree so the next
-  Resume run redoes them under the current rule. Originals are never touched. You are asked to
-  confirm.
+- **List patients whose kept slices are too thick**: the rule is 0.8 mm (0.75 mm and thinner are
+  kept).
+- **Remove those patients from the output so they are redone**: deletes their folders from the
+  *output* tree only, so the next run with "Skip patients already done" redoes them. Originals are
+  never touched. You are asked to confirm.
 
 ## When things go wrong
 
 | Symptom | What to do |
 |---|---|
-| "Output location is no longer reachable" | The external drive disconnected. Reconnect it, tick Resume, Start run. Completed studies are kept. |
-| "No progress for N s while reading: <file>" | A failing drive is hanging on that file. Stop. Create `skip_files.txt` next to the manifest with that full path on one line. Run again with Resume. The study is flagged CHECK because it is missing a slice. |
-| "NO CORONARY SERIES FOUND" for a study | The export has no series that meets the rule (thin, cardiac FOV, >= 100 images, contrast). Re-export from PACS with the thin coronary recon, or check the Series decisions tab to see what was dropped and why. |
-| Verify FAILS | Read the findings on the Verify tab. Each names the file and tag. If it is a needle you typed (e.g. a surname that is also a common word), refine the needle. If it is a real leak, do not share; report it (see `docs/security.md`). |
-| The window says "finished with problems" | Read the log; the last lines say what. Exit code 1 after a drive loss just means "re-run with Resume". |
-| Manifest written on a Mac, running on Windows | Fill in **Path remap**, e.g. `/Volumes/Drive=E:\`. Folder names with a trailing space are handled. |
+| "Output location is no longer reachable" | The external drive disconnected. Reconnect it, tick "Skip patients already done", click Anonymise. Completed patients are kept. |
+| "No progress for N s while reading: <file>" | A failing drive is hanging on that file. Stop. Create `skip_files.txt` next to the patient list with that full path on one line. Run again. The patient is flagged "needs a look" because a slice is missing. |
+| "NO CORONARY SERIES FOUND" for a patient | The export has no series that meets the rule (thin, cardiac field of view, 100+ images, contrast). Re-export from PACS with the thin coronary recon, or look at tab 2 to see what was dropped and why. |
+| The check FAILS | Read the findings on tab 3. Each names the file and tag. If it is a word you typed that is also a common word, refine it. If it is a real leak, do not share; report it (see `docs/security.md`). |
+| The window says "finished with problems" | Read the log; the last lines say what. Exit code 1 after a drive loss just means "run again with skip-already-done ticked". |
+| Patient list written on a Mac, running on Windows | Fill in **Drive path fix**, e.g. `/Volumes/Drive=E:\`. Folder names with a trailing space are handled. |
 
 ## What the app does to every file
 
-New PatientName and PatientID = study ID; date of birth, sex, age, addresses, other IDs removed;
+New PatientName and PatientID = the new ID; date of birth, sex, age, addresses, other IDs removed;
 every date and time set to 1900-01-01 11:11:11; every UID regenerated deterministically so a study
 stays one study; all private tags removed; institution, station, manufacturer, model, physicians,
 descriptions, protocol, kernel and scan options cleared; PACS AE titles dropped from the file
