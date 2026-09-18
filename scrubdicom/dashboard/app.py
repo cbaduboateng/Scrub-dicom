@@ -113,7 +113,7 @@ with tab_series:
             if flt == "Needs a look (CHECK)": rows = [r for r in rows if "CHECK" in r["reason"] or "fallback" in r["reason"]]
             q = st.text_input("Filter by study ID")
             if q: rows = [r for r in rows if q.lower() in r["study_id"].lower()]
-            st.dataframe(rows, use_container_width=True, hide_index=True)
+            st.dataframe(rows, width="stretch", hide_index=True)
             st.download_button("Download as CSV", data="\n".join([",".join(rows[0].keys())] + [",".join(f'"{v}"' for v in r.values()) for r in rows]) if rows else "",
                                file_name="series_decisions.csv")
         else:
@@ -133,7 +133,7 @@ with tab_verify:
     summ = latest(logs, "summary") if logs and logs.exists() else None
     if summ:
         st.subheader("Per-study summary (latest run)")
-        st.dataframe(read_csv(summ), use_container_width=True, hide_index=True)
+        st.dataframe(read_csv(summ), width="stretch", hide_index=True)
     st.warning("The linkage log in _logs/LINKAGE_*_CONFIDENTIAL.csv links study IDs back to patients. Move it out of the output folder before sharing the scans.")
 
 # ----------------------------------------------------------------------------- About
