@@ -1031,6 +1031,9 @@ class App(tk.Tk):
                 self.v_progress.set(100)
             if job == "dry":
                 self.previewed_key = self._spec_key()
+                summary = next((l.strip() for l in reversed(log_text.splitlines()) if l.strip().startswith("DRY RUN")), "Preview finished.")
+                self._show_card("Preview done: nothing was written", summary + "  Look at the images and the header before/after in the viewer, then press Anonymise.",
+                                "Open viewer", lambda: self._viewer("source"))
         elif stopped:
             self.v_progress_text.set(f"{title} stopped after {took}")
             self.v_status.set(f"{title} stopped")
