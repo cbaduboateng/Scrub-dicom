@@ -53,13 +53,16 @@ python -m scrubdicom.fixtures "$TMP/fx" >/dev/null
 "$BIN" --cli run --input "$TMP/fx/ORFAN0231" --output "$TMP/out" --study-id SMOKE-001 >/dev/null
 "$BIN" --cli verify --output "$TMP/out" --needle SMITH --needle BLOGGS | grep -q '^PASS' && echo "frozen engine: PASS"
 rm -rf "$TMP"
-# nothing in the bundle may be able to reach the network: no requests/urllib3/tornado, and no numpy bloat
-if find "$APP" -iname 'requests' -o -iname 'urllib3*' -o -iname 'tornado' -o -iname 'numpy' | grep -q .; then
+# nothing in the bundle may be able to reach the network: no requests/urllib3/tornado
+if find "$APP" -iname 'requests' -o -iname 'urllib3*' -o -iname 'tornado' | grep -q .; then
   echo "unexpected package inside the bundle" >&2; exit 1
 fi
+# the viewer must be able to decode compressed pixel data in the frozen app
+"$BIN" --cli-check-decoders | grep -q "gdcm" || { echo "GDCM decoder missing from the bundle" >&2; exit 1; }
 
 VERSION="$(python -c 'import scrubdicom; print(scrubdicom.__version__)')"
-ARCH="$(lipo -archs "$BIN" | tr " " "-")"; case "$ARCH" in *x86_64*arm64*|*arm64*x86_64*) ARCH=universal;; esac
+# numpy / GDCM wheels are single-architecture, so the app runs on the architecture it was built on
+ARCH="$(uname -m)"
 
 # codesign refuses a bundle carrying Finder / file-provider attributes, which folders under iCloud or Documents sync
 # add to every file. Stage a clean copy (ditto drops them), sign that, and build the dmg from it.

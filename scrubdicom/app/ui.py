@@ -18,6 +18,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import model
 from .model import APP_NAME, APP_VERSION, JobSpec, Settings
 from .runner import EngineProcess
+from .viewer import open_viewer
 
 POLL_MS = 250
 MONO = ("Menlo", 11) if sys.platform == "darwin" else (("Consolas", 10) if os.name == "nt" else ("TkFixedFont", 10))
@@ -54,6 +55,7 @@ class App(tk.Tk):
         self.log_path: Path | None = None
         self.skipped_hidden = 0
         self._out_refresh_id: str | None = None
+        self._viewers: list = []
         self.title(f"{APP_NAME} {APP_VERSION}")
         self.minsize(1000, 720)
         geo = self.settings.get("geometry")
@@ -115,6 +117,9 @@ class App(tk.Tk):
         r.add_separator()
         r.add_command(label="List patients whose kept slices are too thick", command=lambda: self._start_thick(fix=False))
         r.add_command(label="Remove those patients from the output so they are redone...", command=lambda: self._start_thick(fix=True))
+        r.add_separator()
+        r.add_command(label="Viewer: preview original scans...", command=lambda: self._viewer("source"))
+        r.add_command(label="Viewer: check anonymised output...", command=lambda: self._viewer("output"))
         r.add_separator()
         r.add_command(label="Show the command this will run", command=self._show_command)
         m.add_cascade(label="Actions", menu=r)
@@ -222,6 +227,7 @@ class App(tk.Tk):
         self.b_dry.pack(side="left")
         self.b_start.pack(side="left", padx=(8, 0))
         self.b_stop.pack(side="left", padx=(8, 0))
+        ttk.Button(btns, text="Preview a patient in the viewer...", command=lambda: self._viewer("source")).pack(side="left", padx=(24, 0))
         ttk.Button(btns, text="Show the command this will run", command=self._show_command).pack(side="right")
 
         prog = ttk.Frame(t)
@@ -312,6 +318,7 @@ class App(tk.Tk):
         e.bind("<KeyRelease>", lambda _e: self._refresh_series())
         ttk.Button(top, text="Export CSV...", command=self._export_series).pack(side="right")
         ttk.Button(top, text="Refresh", command=self._refresh_series).pack(side="right", padx=(0, 8))
+        ttk.Button(top, text="Open patient in viewer", command=self._viewer_selected_series).pack(side="right", padx=(0, 8))
         self.tv_series = self._tree(t, [("study_id", "New ID", 100), ("series_number", "Series", 55), ("original_description", "Original series name", 220),
                                         ("images", "Images", 60), ("decision", "Decision", 70), ("reason", "Why", 300), ("run", "Run", 110)])
         self.lbl_series = ttk.Label(t, text="", foreground="#6e7781")
@@ -351,7 +358,8 @@ class App(tk.Tk):
         ttk.Button(row, text="Refresh", command=self._refresh_share).pack(side="left")
         ttk.Button(row, text="Move the patient-linking logs out...", command=self._move_logs).pack(side="left", padx=(8, 0))
         ttk.Button(row, text="Open the logs folder", command=lambda: self._open(self._logs())).pack(side="left", padx=(8, 0))
-        ttk.Button(row, text="Open quarantined files (_review)", command=lambda: self._open(self._out() / "_review" if self._out() else None)).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="Review and redact quarantined files in the viewer...", command=lambda: self._viewer("output")).pack(side="left", padx=(8, 0))
+        ttk.Button(row, text="Open _review folder", command=lambda: self._open(self._out() / "_review" if self._out() else None)).pack(side="left", padx=(8, 0))
         ttk.Label(t, text="Files in the logs folder (_logs)").pack(anchor="w", pady=(6, 4))
         self.tv_logs = self._tree(t, [("name", "File", 300), ("size", "Size", 70), ("modified", "Modified", 130), ("note", "", 320)], height=8)
 
@@ -561,6 +569,16 @@ class App(tk.Tk):
         self.clipboard_append(self.log.get("1.0", "end"))
         self.v_status.set("Log copied to clipboard")
 
+    def _viewer(self, mode: str, study_id: str | None = None) -> None:
+        w = open_viewer(self, mode, study_id)
+        if w is not None:
+            self._viewers.append(w)
+
+    def _viewer_selected_series(self) -> None:
+        sel = self.tv_series.selection()
+        sid = self.tv_series.set(sel[0], "study_id") if sel else None
+        self._viewer("source", sid)
+
     def _show_command(self) -> None:
         spec = self._spec()
         problems = spec.validate()
@@ -710,8 +728,67 @@ class App(tk.Tk):
         self._apply_mode()
         self.nb.select(self.tab_run)
         self.update()
-        print("selftest: window built, all tabs drawn", flush=True)
+        for mode in ("source", "output"):
+            w = open_viewer(self, mode)
+            if w is not None:
+                self.update()
+                w.destroy()
+        print("selftest: window built, all tabs drawn, viewer opened", flush=True)
+        self._selftest_viewer_on_synthetic_patients()
         self.after(200, self.destroy)
+
+    def _selftest_viewer_on_synthetic_patients(self) -> None:
+        """Build the synthetic patients, load one into the viewer, and make sure series, pixels and the header
+        diff all come through. Runs inside the frozen app at build time, so a broken bundle cannot ship."""
+        import shutil
+        import tempfile
+        import time
+        try:
+            from scrubdicom import fixtures
+        except ImportError as e:
+            print(f"selftest: fixtures unavailable ({e}); viewer data check skipped", flush=True)
+            return
+        tmp = Path(tempfile.mkdtemp(prefix="scrubdicom_selftest_"))
+        try:
+            import contextlib
+            import io
+            with contextlib.redirect_stdout(io.StringIO()):
+                fixtures.main(tmp / "fx")
+            m = tmp / "patients.csv"
+            m.write_text(f"source_folder,study_id\n{tmp / 'fx' / 'ORFAN0231'},SELFTEST-1\n")
+            self.v_mode.set("manifest")
+            self._apply_mode()
+            self.v_manifest.set(str(m))
+            self.v_output.set(str(tmp / "out"))
+            self.update()
+            w = open_viewer(self, "source", "SELFTEST-1")
+            if w is None:
+                raise RuntimeError("viewer not available")
+            t0 = time.time()
+            while len(w.series) < 3 and time.time() - t0 < 20:
+                self.update()
+                time.sleep(0.05)
+            if len(w.series) != 3:
+                raise RuntimeError(f"viewer loaded {len(w.series)} series, expected 3: {w.v_status.get()}")
+            w.tv.selection_set("1")
+            self.update()
+            if w.view is None or w.photo is None:
+                raise RuntimeError("viewer did not render pixels")
+            names = {w.th.set(r, "name") for r in w.th.get_children("")}
+            if "PatientName" not in names:
+                raise RuntimeError("header diff missing")
+            w.v_orient.set("Coronal")
+            w._orient()
+            t0 = time.time()
+            while w.vol is None and time.time() - t0 < 20:
+                self.update()
+                time.sleep(0.05)
+            if w.vol is None:
+                raise RuntimeError(f"reformat did not load: {w.v_status.get()}")
+            w.destroy()
+            print(f"selftest: viewer rendered {len(w.series)} series, header diff and coronal reformat on synthetic patients", flush=True)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 def run_app(selftest: bool = False) -> int:

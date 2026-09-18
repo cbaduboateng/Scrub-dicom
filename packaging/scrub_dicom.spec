@@ -17,19 +17,39 @@ from scrubdicom.core import VERSION             # noqa: E402
 NAME = "Scrub-DICOM"
 ICON = ROOT / "packaging" / "icons" / ("icon.icns" if sys.platform == "darwin" else "icon.ico")
 
+from PyInstaller.utils.hooks import collect_all
+gdcm_datas, gdcm_binaries, gdcm_hidden = collect_all("gdcm")
+
+if sys.platform == "darwin":
+    # The bootloader and python.org's Python are universal2 and are built that way (a single-architecture
+    # bootloader gets quarantined by endpoint-security software during the build on managed Macs). numpy and
+    # GDCM only ship single-architecture wheels, so the finished app runs on the architecture it was built on;
+    # packaging/build_macos.sh names the .dmg accordingly. Let those binaries through instead of failing.
+    import PyInstaller.utils.osx as _osx
+    _strict = _osx.binary_to_target_arch
+
+    def _lenient(filename, target_arch, display_name=None):
+        try:
+            _strict(filename, target_arch, display_name)
+        except _osx.IncompatibleBinaryArchError:
+            print(f"note: {display_name or filename} is single-architecture; app will run on this Mac's architecture only")
+    _osx.binary_to_target_arch = _lenient
+
 a = Analysis(
     [str(ROOT / "packaging" / "entry.py")],
     pathex=[str(ROOT)],
-    binaries=[],
-    datas=[(str(ROOT / "scrubdicom" / "app" / "HELP.txt"), "scrubdicom/app")],
-    hiddenimports=["scrubdicom.core", "scrubdicom.app.ui", "scrubdicom.app.model", "scrubdicom.app.runner", "openpyxl"],
+    binaries=gdcm_binaries,
+    datas=[(str(ROOT / "scrubdicom" / "app" / "HELP.txt"), "scrubdicom/app")] + gdcm_datas,
+    hiddenimports=["scrubdicom.core", "scrubdicom.app.ui", "scrubdicom.app.model", "scrubdicom.app.runner",
+                   "scrubdicom.app.preview", "scrubdicom.app.viewer", "openpyxl", "numpy", "gdcm",
+                   "pydicom.pixels.decoders.gdcm", "pydicom.pixels.decoders.rle"] + gdcm_hidden,
     hookspath=[],
     runtime_hooks=[],
-    # The engine needs pydicom only. Everything below is either a test/dev dependency or an optional pydicom
-    # extra that would add tens of MB and, in some cases, its own network-capable code.
-    excludes=["numpy", "streamlit", "pandas", "pyarrow", "matplotlib", "PIL", "IPython", "jupyter", "pytest", "scipy",
-              "tornado", "altair", "pylibjpeg", "gdcm", "PyQt5", "PyQt6", "PySide2", "PySide6", "wx", "test", "unittest",
-              "setuptools", "pip", "pydicom.data.test_files" if False else "_pytest"],
+    # The engine needs pydicom only; the viewer adds numpy and GDCM (Apache-2.0) for compressed pixel data.
+    # Everything below is a test/dev dependency or an optional extra with its own network-capable code.
+    excludes=["streamlit", "pandas", "pyarrow", "matplotlib", "PIL", "IPython", "jupyter", "pytest", "scipy",
+              "tornado", "altair", "pylibjpeg", "PyQt5", "PyQt6", "PySide2", "PySide6", "wx", "test", "unittest",
+              "setuptools", "pip", "_pytest", "numpy.testing", "numpy.f2py", "numpy.distutils"],
     noarchive=False,
     optimize=0,
 )

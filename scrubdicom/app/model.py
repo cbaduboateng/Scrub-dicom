@@ -432,10 +432,11 @@ def share_readiness(out: Path) -> list[Check]:
     logs = out / "_logs"
     done, partial = study_state(out)
     status, rep, _ = verify_status(logs)
-    last_run = max((_mtime(latest(logs, "summary", (".csv",))), _mtime(latest(logs, "files", (".csv",)))))
+    last_run = max((_mtime(latest(logs, "summary", (".csv",))), _mtime(latest(logs, "files", (".csv",))),
+                    max((_mtime(p) for p in logs.glob("redactions_*.csv")), default=0.0)))
     if status == "PASS":
         if rep and _mtime(rep) < last_run:
-            checks.append(Check("warn", "Verify passed, but a run has happened since", "Run verify again so the report covers the newest studies."))
+            checks.append(Check("warn", "Check passed, but files have changed since (a run or a redaction)", "Run the check again so the report covers the newest files."))
         else:
             checks.append(Check("ok", "Verify passed", rep.name if rep else ""))
     elif status == "FAIL":

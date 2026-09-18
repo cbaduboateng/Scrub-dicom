@@ -26,7 +26,9 @@ bash packaging/build_macos.sh
 ```
 
 Produces `dist/Scrub-DICOM.app` and `dist/Scrub-DICOM-<version>-macOS-<arch>.dmg` plus a `.sha256`.
-The build is universal2, so one `.dmg` runs on Intel and Apple-silicon Macs.
+The app runs on the architecture of the Mac it was built on (the viewer's numpy and GDCM wheels are
+single-architecture). Build on an Apple-silicon Mac for Apple-silicon users and on an Intel Mac for
+Intel users; the `.dmg` name carries the architecture.
 
 To sign and notarise, set these in the shell before running (never commit them):
 

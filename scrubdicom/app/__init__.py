@@ -50,6 +50,12 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if argv and argv[0] == "--cli":
         return _cli(argv[1:])
+    if argv and argv[0] == "--cli-check-decoders":   # build smoke test: which pixel decoders the bundle carries
+        from pydicom.pixels import get_decoder
+        from pydicom.uid import JPEG2000, JPEGLSLossless, JPEGBaseline8Bit
+        for uid in (JPEG2000, JPEGLSLossless, JPEGBaseline8Bit):
+            print(uid.name, ":", ", ".join(get_decoder(uid).available_plugins) or "none")
+        return 0
     from .ui import run_app
     return run_app(selftest="--selftest" in argv)
 

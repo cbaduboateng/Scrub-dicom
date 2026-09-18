@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scrub-dicom"
-version = "0.2.0"
+version = "0.3.0"
 description = "Batch pseudonymisation of cardiac CT (CTCA) DICOM studies for blinded research reads: strips patient, centre and scanner identity, keeps only the coronary series, verifies its own output."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -25,7 +25,8 @@ dependencies = ["pydicom>=2.4"]
 xlsx = ["openpyxl>=3.1"]
 test = ["pytest>=7", "numpy>=1.24"]
 dashboard = ["streamlit>=1.30"]
-build = ["pyinstaller>=6.10", "pillow>=10"]
+viewer = ["numpy>=1.24", "python-gdcm>=3.0"]
+build = ["pyinstaller>=6.10", "pillow>=10", "numpy>=1.24", "python-gdcm>=3.0"]
 
 [project.scripts]
 scrub-dicom = "scrubdicom.core:main"

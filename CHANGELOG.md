@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.0 (2026-09-18)
+In-app DICOM viewer.
+- Preview before committing: the "Original scans" view shows every series with its keep/drop decision and a
+  thumbnail, the images, and the header before/after with each change highlighted, all computed in memory by the
+  same engine code that will run. "Keep this series instead" writes a series-pick the run honours.
+- Check and redact after: the "Anonymised output" view shows the written copies and the quarantined files; draw
+  boxes over burned-in text and release the file into the study folder. Redactions are logged and the share
+  checklist asks for a fresh verify.
+- Viewing: bilinear rendering, zoom/pan, window/level presets and drag, Hounsfield readout, cine, corner
+  annotations, series thumbnails, axial/coronal/sagittal reformats. Compressed pixel data via GDCM (Apache-2.0).
+- "Open this file in your DICOM viewer" hands off to the installed viewer.
+- Tests 38 -> 52 including a driven run of the viewer window on synthetic patients.
+
 ## 0.2.0 (2026-09-18)
 Desktop app. The engine (`scrubdicom/core.py`) is unchanged apart from the version string it writes into
 DeidentificationMethod.

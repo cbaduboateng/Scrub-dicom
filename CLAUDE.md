@@ -20,8 +20,10 @@ thing not to break. Read `README.md`, `CHANGELOG.md` and `docs/tag_policy.md` be
 - `scrubdicom/core.py`     engine + CLI (`run`, `verify`, `thick`)
 - `scrubdicom/survey.py`   standalone series survey / select
 - `scrubdicom/fixtures.py` synthetic test patients with planted identifiers (no real data anywhere in the repo)
-- `scrubdicom/app/`       desktop app (v0.2): `model.py` logic (no Tk, unit-tested), `runner.py` engine child
-                           process, `ui.py` the Tk window, `__init__.py` entry with `--cli` re-entry and `--selftest`
+- `scrubdicom/app/`       desktop app: `model.py` logic (no Tk, unit-tested), `runner.py` engine child process,
+                           `ui.py` the Tk window, `preview.py` viewer logic (scan, header diff, pixels, redaction,
+                           reformats; no Tk), `viewer.py` the viewer window, `__init__.py` entry with `--cli`
+                           re-entry and `--selftest`
 - `scrubdicom/dashboard/`  Streamlit dashboard (v0.1: developer-grade; binds 127.0.0.1, telemetry off)
 - `packaging/`             PyInstaller spec, macOS/Windows build scripts, Inno Setup script, icons
 - `launchers/`             double-click RUN_ME.command / RUN_ME.bat templates

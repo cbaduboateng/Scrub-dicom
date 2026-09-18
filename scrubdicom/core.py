@@ -53,7 +53,7 @@ try:
 except ImportError:
     sys.exit("pydicom is not installed. Run:  pip install pydicom")
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 DUMMY_DATE = "19000101"
 DUMMY_TIME = "111111.111111"
 DUMMY_DATETIME = "19000101111111.111111"

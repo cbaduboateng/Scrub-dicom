@@ -39,6 +39,7 @@ anyone.
 | `<out>/_logs/files_*.csv`, `summary_*.csv`, `unmapped_*.csv` | original folder paths next to study IDs. Folder names are usually hospital numbers | **yes** |
 | `<out>/_logs/series_*.csv` | original series descriptions, which name the vendor and sometimes the site protocol | yes |
 | `<out>/_logs/app_*.txt`, `dashboard_*.txt`, `run_log*.txt` | the engine's console output, which prints source folder names | yes |
+| `<out>/_logs/redactions_*.csv` | which quarantined files were released, with the box coordinates | no identifiers, but it proves a human decision was taken; keep it |
 | `<out>/_logs/verify_*.txt` | PASS: file count and output path only. FAIL: quotes the offending values | PASS no; FAIL yes |
 | `<out>/_logs/uid_salt.txt` | the random salt for UID hashing | no. It cannot reverse a hash. Keep it with the output if re-runs must reproduce the same UIDs |
 | `<out>/<study>/.complete*` | a timestamp | no |
@@ -58,7 +59,8 @@ The software cannot do these for you.
    cohort: consultant surnames, the hospital's ODS code, an unusual protocol name. The linkage log's
    original IDs are used as needles automatically.
 2. **Look at `_review/`.** Dose reports, secondary captures and PDFs can carry burned-in text. The
-   tool does not attempt pixel-level redaction. Delete them or check them by eye before sharing.
+   viewer's "Anonymised output" view shows each one; draw boxes over any text and release the file,
+   or delete it. There is no automatic detection of burned-in text: the eye is the detector.
 3. **Keep the linkage log somewhere else**, on an encrypted volume, with the same protection as the
    original scans. It is the only way back from study ID to patient.
 4. **Do not rename study IDs to something meaningful.** A study ID that encodes the site or the
@@ -73,8 +75,10 @@ The software cannot do these for you.
 
 ## Supply chain and build integrity
 
-- Runtime dependency: `pydicom` only, pinned in `packaging/requirements-build.txt`. `openpyxl` is
-  included for `.xlsx` mapping files. Nothing else ships.
+- Runtime dependencies, pinned in `packaging/requirements-build.txt`: `pydicom` (engine), `openpyxl`
+  (`.xlsx` mapping files), and for the viewer `numpy` and `python-gdcm` (Apache-2.0; decodes JPEG 2000,
+  JPEG-LS and JPEG pixel data). Nothing else ships. GDCM bundles its own OpenSSL for DICOM attribute
+  encryption; nothing in the app opens a socket, and the build refuses a bundle containing an HTTP library.
 - Builds use python.org Python in a fresh virtualenv; the build scripts refuse conda.
 - The app is built from the same `scrubdicom/core.py` as the CLI, with no engine changes. Every
   build runs the full test suite, then runs the frozen engine on synthetic patients and verifies the

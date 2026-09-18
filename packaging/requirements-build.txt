@@ -3,9 +3,11 @@
 # version that was validated.
 pydicom==3.0.2
 openpyxl==3.1.5
+# viewer: pixel decoding (numpy) and compressed transfer syntaxes (GDCM, Apache-2.0)
+numpy==2.5.3
+python-gdcm==3.2.6
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.7
-# build-time only (tests, fixtures, icons); not bundled into the app
+# build-time only (tests, icons); not bundled into the app
 pytest==9.1.1
-numpy==2.5.3
 pillow==12.3.0

@@ -48,6 +48,22 @@ TAB 1  ANONYMISE
     Show the command...        the command line for the current settings, so a colleague can reproduce the
                                run from a terminal.
 
+THE VIEWER  (button "Preview a patient in the viewer..." on tab 1; "Open patient in viewer" on tab 2;
+             "Review and redact quarantined files" on tab 4)
+  Two views of the same window:
+    Original scans     what Anonymise WILL do, computed in memory: every series with its keep/drop decision and a
+                       thumbnail, the images, and the header before and after with each removed, changed or added
+                       tag highlighted. Nothing is written. "Keep this series instead" records your choice next to
+                       the patient list (series_picks.csv); the run reads it.
+    Anonymised output  what WAS written, plus the quarantined files in _review. Draw boxes over burned-in text,
+                       then "Apply and release": the boxes are painted black in the anonymised copy, the file moves
+                       into the patient's folder, and the action is logged. Run the output check again afterwards.
+  Viewing: mouse wheel or arrow keys scroll slices; drag = window/level; shift-drag or right-drag = pan;
+  cmd/ctrl + wheel, or + and -, = zoom; double-click = fit; space = cine. Presets for coronary, soft tissue,
+  lung and bone windows. Axial, coronal and sagittal reformats (the series is loaded into memory once). The
+  Hounsfield value under the cursor is shown top right. "Open this file in your DICOM viewer" hands the current
+  file to whatever viewer is installed (Bee, Horos, Weasis...).
+
 TAB 2  CHECK SERIES
   One row per series per patient: kept, dropped, or "needs a look" (the engine used a fallback rule because
   the header lacked contrast or cardiac-phase information, or an already-analysed pick did not match). Look at
