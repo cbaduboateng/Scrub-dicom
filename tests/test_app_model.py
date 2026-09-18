@@ -224,3 +224,12 @@ def test_external_viewer_command(monkeypatch):
     assert model.viewer_app_name("/Applications/Bee DICOM Viewer.app") == "Bee DICOM Viewer"
     assert model.viewer_app_name("") == "system default viewer"
     assert "external_viewer" in model.SETTINGS_KEYS
+
+
+def test_find_applications(tmp_path):
+    (tmp_path / "Bee DICOM Viewer.app").mkdir()
+    (tmp_path / "Zed.app").mkdir()
+    (tmp_path / "notes.txt").write_text("x")
+    (tmp_path / "Fake.app").write_text("not a bundle")
+    apps = model.find_applications([tmp_path, tmp_path / "missing"])
+    assert [n for n, _ in apps] == ["Bee DICOM Viewer", "Zed"]

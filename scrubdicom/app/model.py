@@ -641,6 +641,20 @@ def external_viewer_command(target: Path, app_path: str = "") -> list[str] | Non
     return [app_path, target] if app_path else ["xdg-open", target]
 
 
+def find_applications(extra_dirs: list[Path] | None = None) -> list[tuple[str, Path]]:
+    """(name, path) of installed applications: macOS .app bundles in the usual folders (extra_dirs for tests)."""
+    dirs = extra_dirs if extra_dirs is not None else [Path("/Applications"), Path("/Applications/Utilities"), Path.home() / "Applications", Path("/System/Applications")]
+    found: dict[str, Path] = {}
+    for d in dirs:
+        try:
+            for p in sorted(d.iterdir()):
+                if p.suffix == ".app" and p.is_dir():
+                    found.setdefault(p.stem, p)
+        except OSError:
+            continue
+    return sorted(found.items(), key=lambda t: t[0].lower())
+
+
 def viewer_app_name(app_path: str) -> str:
     p = Path(app_path.strip()) if app_path.strip() else None
     return (p.stem if p else "system default viewer")

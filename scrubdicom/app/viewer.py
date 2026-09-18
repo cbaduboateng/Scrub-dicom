@@ -41,7 +41,7 @@ class ViewerWindow(tk.Toplevel):
         super().__init__(app)
         self.app = app
         self.title("Scrub-DICOM viewer")
-        self.minsize(1180, 740)
+        self.minsize(1220, 740)
         self.geometry("1400x860")
         self.spec = app._spec()
         self.out: Path | None = app._out()
@@ -84,7 +84,19 @@ class ViewerWindow(tk.Toplevel):
         self._build()
         self._load_patients(study_id)
         self.after(150, self._poll)
+        self.after(60, self._init_sashes)
         self.protocol("WM_DELETE_WINDOW", self._close)
+
+    def _init_sashes(self) -> None:
+        """Series list ~300 px, header ~400 px, the image gets the rest; the user can still drag the sashes."""
+        try:
+            self.update_idletasks()
+            total = self.pane.winfo_width()
+            if total > 900:
+                self.pane.sashpos(0, 280)
+                self.pane.sashpos(1, total - 390)
+        except tk.TclError:
+            pass
 
     # ================================================================== layout
     def _build(self) -> None:
@@ -110,6 +122,7 @@ class ViewerWindow(tk.Toplevel):
 
         pane = ttk.PanedWindow(self, orient="horizontal")
         pane.pack(fill="both", expand=True, padx=10)
+        self.pane = pane
 
         # ---- left: series
         left = ttk.Frame(pane, padding=(0, 0, 6, 0))
@@ -139,35 +152,40 @@ class ViewerWindow(tk.Toplevel):
 
         # ---- middle: image
         mid = ttk.Frame(pane)
-        pane.add(mid, weight=3)
+        pane.add(mid, weight=4)
+        toggle = theme.style_or("Toggle.TButton")
         tb = ttk.Frame(mid)
-        tb.pack(fill="x", pady=(0, 4))
+        tb.pack(fill="x", pady=(0, 2))
+        tb2 = ttk.Frame(mid)
+        tb2.pack(fill="x", pady=(0, 2))
+        tb3 = ttk.Frame(mid)
+        tb3.pack(fill="x", pady=(0, 4))
+        # row 1: orientation and zoom buttons
         for o in pv.ORIENTATIONS:
-            ttk.Radiobutton(tb, text=o, value=o, variable=self.v_orient, command=self._orient).pack(side="left", padx=(0, 6))
-        ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=6)
+            ttk.Radiobutton(tb, text=o, value=o, variable=self.v_orient, command=self._orient, style=toggle).pack(side="left", padx=(0, 4))
+        ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8)
         ttk.Button(tb, text="Fit", width=4, command=lambda: self._set_zoom(1.0, reset_pan=True)).pack(side="left")
         ttk.Button(tb, text="1:1", width=4, command=self._one_to_one).pack(side="left", padx=(4, 0))
         ttk.Button(tb, text="+", width=3, command=lambda: self._zoom_step(1)).pack(side="left", padx=(4, 0))
         ttk.Button(tb, text="-", width=3, command=lambda: self._zoom_step(-1)).pack(side="left", padx=(4, 0))
-        ttk.Label(tb, text="Zoom").pack(side="left", padx=(6, 2))
-        self.v_zoom_pct = tk.DoubleVar(value=100.0)
-        self.zoom_scale = ttk.Scale(tb, from_=25, to=800, orient="horizontal", length=130, variable=self.v_zoom_pct, command=lambda _v: self._zoom_from_slider())
-        self.zoom_scale.pack(side="left")
-        self.lbl_zoom = ttk.Label(tb, text="100%", width=5)
-        self.lbl_zoom.pack(side="left")
-        ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=6)
-        ttk.Label(tb, text="Mouse drag:").pack(side="left")
+        # row 2: what the mouse does, and the zoom slider
+        ttk.Label(tb2, text="Mouse drag").pack(side="left")
         self.v_tool = tk.StringVar(value="Window/Level")
-        for tool in ("Window/Level", "Zoom", "Pan"):
-            ttk.Radiobutton(tb, text=tool, value=tool, variable=self.v_tool, command=self._redact_mode).pack(side="left", padx=(4, 0))
-        ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=6)
-        self.b_play = ttk.Button(tb, text="Play", width=5, command=self._toggle_play)
+        for tool, text in (("Window/Level", "W/L"), ("Zoom", "Zoom"), ("Pan", "Pan")):
+            ttk.Radiobutton(tb2, text=text, value=tool, variable=self.v_tool, command=self._redact_mode, style=toggle).pack(side="left", padx=(6, 0))
+        ttk.Separator(tb2, orient="vertical").pack(side="left", fill="y", padx=8)
+        self.v_zoom_pct = tk.DoubleVar(value=100.0)
+        self.zoom_scale = ttk.Scale(tb2, from_=25, to=800, orient="horizontal", length=120, variable=self.v_zoom_pct, command=lambda _v: self._zoom_from_slider())
+        self.zoom_scale.pack(side="left")
+        self.lbl_zoom = ttk.Label(tb2, text="100%", width=5)
+        self.lbl_zoom.pack(side="left")
+        # row 3: cine and display toggles
+        self.b_play = ttk.Button(tb3, text="Play", width=5, command=self._toggle_play)
         self.b_play.pack(side="left")
-        ttk.Spinbox(tb, from_=2, to=40, textvariable=self.v_fps, width=3).pack(side="left", padx=(4, 0))
-        ttk.Label(tb, text="fps").pack(side="left", padx=(2, 6))
-        ttk.Checkbutton(tb, text="Invert", variable=self.v_invert, command=self._render).pack(side="left", padx=(6, 0))
-        ttk.Checkbutton(tb, text="Annotations", variable=self.v_annot, command=self._render).pack(side="left", padx=(6, 0))
-        ttk.Label(tb, textvariable=self.v_readout, font=SMALL).pack(side="right")
+        ttk.Spinbox(tb3, from_=2, to=40, textvariable=self.v_fps, width=3).pack(side="left", padx=(4, 0))
+        ttk.Label(tb3, text="fps").pack(side="left", padx=(2, 6))
+        ttk.Checkbutton(tb3, text="Invert", variable=self.v_invert, command=self._render, style=theme.style_or("Switch.TCheckbutton")).pack(side="left", padx=(8, 0))
+        ttk.Checkbutton(tb3, text="Annotations", variable=self.v_annot, command=self._render, style=theme.style_or("Switch.TCheckbutton")).pack(side="left", padx=(8, 0))
 
         self.canvas = tk.Canvas(mid, bg="black", highlightthickness=0, cursor="fleur")
         self.canvas.pack(fill="both", expand=True)
@@ -210,9 +228,8 @@ class ViewerWindow(tk.Toplevel):
         e2.pack(side="left", padx=(4, 12))
         for e in (e1, e2):
             e.bind("<Return>", lambda _e: self._manual_wl())
-        ttk.Label(row, text="wheel / arrows: slices · cmd/ctrl-wheel or +/-: zoom · double-click: fit · right-drag: pan",
-                  style="Muted.TLabel").pack(side="left")
-        self.lbl_slice = ttk.Label(row, text="")
+        ttk.Label(row, textvariable=self.v_readout, font=SMALL).pack(side="left", padx=(6, 0))
+        self.lbl_slice = ttk.Label(row, text="", style="Muted.TLabel")
         self.lbl_slice.pack(side="right")
         red = ttk.Frame(ctl)
         red.pack(fill="x", pady=(6, 0))
@@ -846,11 +863,10 @@ class ViewerWindow(tk.Toplevel):
     def _choose_viewer_app(self) -> None:
         from tkinter import filedialog
         if sys.platform == "darwin":
-            p = filedialog.askopenfilename(parent=self, title="Choose a DICOM viewer application", initialdir="/Applications",
-                                           filetypes=[("Applications", "*.app"), ("All files", "*")])
-        else:
-            p = filedialog.askopenfilename(parent=self, title="Choose a DICOM viewer application",
-                                           filetypes=[("Programs", "*.exe"), ("All files", "*")])
+            AppPicker(self, on_choose=self._set_viewer_app)       # .app bundles are folders: the file dialog greys them out
+            return
+        p = filedialog.askopenfilename(parent=self, title="Choose a DICOM viewer application",
+                                       filetypes=[("Programs", "*.exe"), ("All files", "*")])
         if p:
             self._set_viewer_app(p)
 
@@ -866,6 +882,60 @@ class ViewerWindow(tk.Toplevel):
     def _close(self) -> None:
         self._stop_play()
         self.destroy()
+
+
+class AppPicker(tk.Toplevel):
+    """Pick an installed macOS application by name (Bee DICOM Viewer, Horos, OsiriX, Weasis...)."""
+
+    def __init__(self, parent, on_choose):
+        super().__init__(parent)
+        self.title("Choose a viewer application")
+        self.geometry("460x520")
+        self.transient(parent)
+        self.on_choose = on_choose
+        self.apps = model.find_applications()
+        self.v_filter = tk.StringVar()
+        ttk.Label(self, text="Applications", style="H2.TLabel").pack(anchor="w", padx=12, pady=(12, 4))
+        f = ttk.Entry(self, textvariable=self.v_filter)
+        f.pack(fill="x", padx=12)
+        f.insert(0, "")
+        f.bind("<KeyRelease>", lambda _e: self._fill())
+        self.lb = tk.Listbox(self, exportselection=False)
+        theme.style_text(self.lb)
+        self.lb.pack(fill="both", expand=True, padx=12, pady=8)
+        self.lb.bind("<Double-Button-1>", lambda _e: self._choose())
+        b = ttk.Frame(self, padding=(12, 0, 12, 12))
+        b.pack(fill="x")
+        ttk.Button(b, text="Choose", style=theme.style_or("Accent.TButton"), command=self._choose).pack(side="left")
+        ttk.Button(b, text="Other folder...", command=self._other).pack(side="left", padx=(8, 0))
+        ttk.Button(b, text="Cancel", command=self.destroy).pack(side="right")
+        self._fill()
+        f.focus_set()
+        for i, (name, _) in enumerate(self.shown):
+            if "dicom" in name.lower() or name.lower() in ("horos", "osirix", "weasis", "microdicom"):
+                self.lb.selection_set(i)
+                self.lb.see(i)
+                break
+
+    def _fill(self) -> None:
+        q = self.v_filter.get().strip().lower()
+        self.shown = [(n, p) for n, p in self.apps if q in n.lower()]
+        self.lb.delete(0, "end")
+        for n, _ in self.shown:
+            self.lb.insert("end", n)
+
+    def _choose(self) -> None:
+        sel = self.lb.curselection()
+        if sel:
+            self.on_choose(str(self.shown[sel[0]][1]))
+            self.destroy()
+
+    def _other(self) -> None:
+        from tkinter import filedialog
+        p = filedialog.askdirectory(parent=self, title="Choose the .app bundle (select it and press Choose)", initialdir="/Applications")
+        if p:
+            self.on_choose(p)
+            self.destroy()
 
 
 def pydicom_ipp(path: Path) -> float | None:
