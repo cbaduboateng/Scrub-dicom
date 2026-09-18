@@ -1,0 +1,3 @@
+# One full source path per line. These files are never opened (a failing drive hangs on them).
+# The study is still processed and flagged CHECK because it is missing that slice.
+/Volumes/Drive/Exports/Hospital A/H0001234/IM-0004-0166.dcm

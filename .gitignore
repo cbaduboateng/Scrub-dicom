@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.egg-info/
+.venv/
+# never commit scans, logs or linkage files
+*.dcm
+_logs/
+_review/
+*_CONFIDENTIAL.csv
+run_log*.txt
+test_fixtures/
+.DS_Store
+._*
