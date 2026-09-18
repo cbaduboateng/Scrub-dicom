@@ -26,7 +26,9 @@ the app (macOS) or use Add/Remove Programs (Windows).
 
 ## The four steps
 
-The tabs are numbered in the order you use them.
+The tabs are numbered in the order you use them. The **Dark / Light** button in the header switches the
+look; the app follows the system appearance at first launch. Under the buttons on the first tab a line
+tells you what is still missing, and Anonymise becomes available when the form is complete.
 
 ### 1  Anonymise
 
@@ -51,6 +53,23 @@ folder outside them. It will contain one folder per patient, named by new ID, pl
   a kernel name identifies the scanner make.
 - **One folder per patient, no series sub-folders**.
 - **Check the output automatically when done**: leave on.
+
+**De-identification profile.** "Blinded read" (the default) removes everything identifying and is the
+policy validated on the 520-study cohort. Other profiles keep a little more when a study needs it:
+
+| Profile | Keeps |
+|---|---|
+| Blinded read (default) | nothing |
+| Longitudinal follow-up | sex, age in 5-year buckets, dates shifted by a secret per-patient offset so intervals survive |
+| Blinded read + patient characteristics | sex, 5-year age bucket, weight and height |
+| Blinded read + scanner and technical | scanner make and model, kernel and scan options |
+
+**Edit profiles...** lets you copy a built-in profile and tick exactly what to keep, and set what the
+patient name, study description and method text become. Whatever you tick, private tags, original UIDs,
+physician names, accession and order numbers, comments and addresses are always removed. The profile
+is written into every file (DeidentificationMethod) and into `_logs/profile.json`, and the output check
+verifies against it, so a reader can tell what was retained. The viewer's header before/after follows
+the chosen profile.
 
 Buttons:
 

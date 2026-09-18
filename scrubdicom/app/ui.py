@@ -19,6 +19,8 @@ from . import model
 from .model import APP_NAME, APP_VERSION, JobSpec, Settings
 from .runner import EngineProcess
 from .viewer import open_viewer
+from .profile_ui import ProfileEditor
+from . import theme
 
 POLL_MS = 250
 MONO = ("Menlo", 11) if sys.platform == "darwin" else (("Consolas", 10) if os.name == "nt" else ("TkFixedFont", 10))
@@ -57,15 +59,14 @@ class App(tk.Tk):
         self._out_refresh_id: str | None = None
         self._viewers: list = []
         self.title(f"{APP_NAME} {APP_VERSION}")
-        self.minsize(1000, 720)
+        self.minsize(1000, 820)
         geo = self.settings.get("geometry")
         if geo:
             try:
                 self.geometry(geo)
             except tk.TclError:
                 pass
-        if sys.platform.startswith("linux"):
-            ttk.Style(self).theme_use("clam")
+        self.theme_mode = theme.apply(self, self.settings.get("theme") or None)
         self._make_vars()
         self._make_menu()
         self._make_layout()
@@ -91,6 +92,9 @@ class App(tk.Tk):
         self.v_match_on_label = tk.StringVar(value=MATCH_ON_LABELS.get(self.v_match_on.get(), MATCH_ON_LABELS["patientid"]))
         self.v_match_on_label.trace_add("write", lambda *_: self.v_match_on.set(MATCH_ON_KEYS.get(self.v_match_on_label.get(), "patientid")))
         self.v_series_pick = sv("series_pick")
+        self.v_profile = sv("profile")
+        self.v_profile_desc = tk.StringVar()
+        self.v_profile_label = tk.StringVar()
         self.v_ctca, self.v_resume, self.v_keep_tech, self.v_flat = bv("ctca_only"), bv("resume"), bv("keep_technical"), bv("flat")
         self.v_verify_after, self.v_show_all = bv("verify_after_run"), bv("show_all_lines")
         self.v_needles = tk.StringVar()              # never persisted: these are identifiers
@@ -130,8 +134,16 @@ class App(tk.Tk):
         self.config(menu=m)
 
     def _make_layout(self) -> None:
+        head = ttk.Frame(self, padding=(14, 10, 14, 6))
+        head.pack(fill="x")
+        ttk.Label(head, text=APP_NAME, style="Title.TLabel").pack(side="left")
+        ttk.Label(head, text="Pseudonymise cardiac CT for blinded reads. Originals are never modified. No network.", style="Muted.TLabel").pack(side="left", padx=(14, 0), pady=(6, 0))
+        self.b_theme = ttk.Button(head, text="Dark" if self.theme_mode == "light" else "Light", width=6, command=self._toggle_theme)
+        self.b_theme.pack(side="right")
+        ttk.Label(head, textvariable=self.v_profile_label, style="Muted.TLabel").pack(side="right", padx=(0, 12), pady=(6, 0))
+        ttk.Label(head, text="Profile:", style="Muted.TLabel").pack(side="right", padx=(0, 4), pady=(6, 0))
         self.nb = ttk.Notebook(self)
-        self.nb.pack(fill="both", expand=True, padx=8, pady=(8, 0))
+        self.nb.pack(fill="both", expand=True, padx=10, pady=(4, 0))
         self.tab_run, self.tab_series, self.tab_verify, self.tab_share, self.tab_help = (ttk.Frame(self.nb, padding=10) for _ in range(5))
         for tab, name in ((self.tab_run, "1  Anonymise"), (self.tab_series, "2  Check series"), (self.tab_verify, "3  Verify output"),
                           (self.tab_share, "4  Share safely"), (self.tab_help, "Help")):
@@ -145,7 +157,9 @@ class App(tk.Tk):
         bar.pack(fill="x")
         ttk.Label(bar, textvariable=self.v_status).pack(side="left")
         ttk.Label(bar, text=f"Engine {model.ENGINE_VERSION} · {'packaged' if model.is_frozen() else 'source'} · no network access",
-                  foreground="#6e7781").pack(side="right")
+                  style="Muted.TLabel").pack(side="right")
+        self._apply_theme_colours()
+        self._watch_form()
 
     # ------------------------------------------------------------------ Run tab
     def _path_row(self, parent, r, label, var, kind=None, hint=None, filetypes=None):
@@ -160,7 +174,7 @@ class App(tk.Tk):
             b.grid(row=r, column=2, padx=(6, 0), pady=3)
             widgets.append(b)
         if hint:
-            h = ttk.Label(parent, text=hint, foreground="#6e7781")
+            h = ttk.Label(parent, text=hint, style="Muted.TLabel")
             h.grid(row=r, column=3, sticky="w", padx=(8, 0))
             widgets.append(h)
         return widgets
@@ -176,7 +190,7 @@ class App(tk.Tk):
         for i, mode in enumerate(model.MODES):
             ttk.Radiobutton(inp, text=model.MODE_LABELS[mode], value=mode, variable=self.v_mode, command=self._apply_mode)\
                 .grid(row=0, column=i, sticky="w", padx=(0, 16))
-        self.lbl_mode = ttk.Label(inp, text="", foreground="#6e7781", wraplength=880, justify="left")
+        self.lbl_mode = ttk.Label(inp, text="", style="Muted.TLabel", wraplength=880, justify="left")
         self.lbl_mode.grid(row=1, column=0, columnspan=4, sticky="w", pady=(2, 0))
         fields = ttk.Frame(inp)
         fields.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(6, 0))
@@ -205,7 +219,7 @@ class App(tk.Tk):
         outf.columnconfigure(1, weight=1)
         self._path_row(outf, 0, "Output folder", self.v_output, "dir", "a different drive, or at least outside the scans")
         ttk.Button(outf, text="Open", command=lambda: self._open(self._out())).grid(row=0, column=3, padx=(6, 0))
-        ttk.Label(outf, textvariable=self.v_out_status, foreground="#6e7781").grid(row=1, column=0, columnspan=4, sticky="w", pady=(4, 0))
+        ttk.Label(outf, textvariable=self.v_out_status, style="Muted.TLabel").grid(row=1, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
         opt = ttk.LabelFrame(t, text="Step 3  Options", padding=8)
         opt.grid(row=2, column=0, sticky="ew", pady=(8, 0))
@@ -216,8 +230,17 @@ class App(tk.Tk):
         ttk.Checkbutton(opt, text="Keep scanner technical details (kernel, scan options)", variable=self.v_keep_tech).grid(row=1, column=0, sticky="w", padx=(0, 24))
         ttk.Checkbutton(opt, text="One folder per patient, no series sub-folders", variable=self.v_flat).grid(row=1, column=1, sticky="w")
         ttk.Checkbutton(opt, text="Check the output automatically when done", variable=self.v_verify_after).grid(row=2, column=0, sticky="w", padx=(0, 24))
-        self.lbl_manifest_only = ttk.Label(opt, text="", foreground="#6e7781")
+        self.lbl_manifest_only = ttk.Label(opt, text="", style="Muted.TLabel")
         self.lbl_manifest_only.grid(row=2, column=1, sticky="w")
+        prow = ttk.Frame(opt)
+        prow.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        ttk.Label(prow, text="De-identification profile").pack(side="left")
+        self.cb_profile = ttk.Combobox(prow, textvariable=self.v_profile_label, state="readonly", width=44)
+        self.cb_profile.pack(side="left", padx=(8, 6))
+        self.cb_profile.bind("<<ComboboxSelected>>", lambda _e: self._profile_chosen())
+        ttk.Button(prow, text="Edit profiles...", command=self._edit_profiles).pack(side="left")
+        self._profile_entries = []
+        self._refresh_profile_label()
 
         btns = ttk.Frame(t)
         btns.grid(row=3, column=0, sticky="ew", pady=(10, 0))
@@ -227,8 +250,12 @@ class App(tk.Tk):
         self.b_dry.pack(side="left")
         self.b_start.pack(side="left", padx=(8, 0))
         self.b_stop.pack(side="left", padx=(8, 0))
-        ttk.Button(btns, text="Preview a patient in the viewer...", command=lambda: self._viewer("source")).pack(side="left", padx=(24, 0))
+        self.b_viewer = ttk.Button(btns, text="Preview a patient in the viewer...", command=lambda: self._viewer("source"))
+        self.b_viewer.pack(side="left", padx=(24, 0))
         ttk.Button(btns, text="Show the command this will run", command=self._show_command).pack(side="right")
+        self.v_ready = tk.StringVar(value="")
+        self.lbl_ready = ttk.Label(t, textvariable=self.v_ready, wraplength=900, justify="left")
+        self.lbl_ready.grid(row=6, column=0, sticky="w", pady=(4, 0))
 
         prog = ttk.Frame(t)
         prog.grid(row=4, column=0, sticky="ew", pady=(10, 4))
@@ -321,7 +348,7 @@ class App(tk.Tk):
         ttk.Button(top, text="Open patient in viewer", command=self._viewer_selected_series).pack(side="right", padx=(0, 8))
         self.tv_series = self._tree(t, [("study_id", "New ID", 100), ("series_number", "Series", 55), ("original_description", "Original series name", 220),
                                         ("images", "Images", 60), ("decision", "Decision", 70), ("reason", "Why", 300), ("run", "Run", 110)])
-        self.lbl_series = ttk.Label(t, text="", foreground="#6e7781")
+        self.lbl_series = ttk.Label(t, text="", style="Muted.TLabel")
         self.lbl_series.pack(anchor="w", pady=(6, 0))
         self.series_rows: list[dict] = []
 
@@ -337,7 +364,7 @@ class App(tk.Tk):
         self.b_verify = ttk.Button(row, text="Check the output now", command=self._start_verify)
         self.b_verify.pack(side="left", padx=(8, 0))
         ttk.Button(row, text="Open report", command=lambda: self._open(model.verify_status(self._logs())[1] if self._logs() else None)).pack(side="left", padx=(8, 0))
-        self.lbl_verify = ttk.Label(t, text="Not checked yet.", font=("TkDefaultFont", 14, "bold"))
+        self.lbl_verify = ttk.Label(t, text="Not checked yet.", style="Big.TLabel")
         self.lbl_verify.pack(anchor="w", pady=(0, 6))
         self.txt_verify = tk.Text(t, font=MONO, wrap="none", height=14, state="disabled")
         self.txt_verify.pack(fill="both", expand=True)
@@ -348,10 +375,10 @@ class App(tk.Tk):
     # ------------------------------------------------------------------ Share tab
     def _build_share_tab(self) -> None:
         t = self.tab_share
-        ttk.Label(t, text="Is the output folder safe to hand over?", font=("TkDefaultFont", 13, "bold")).pack(anchor="w")
+        ttk.Label(t, text="Is the output folder safe to hand over?", style="H2.TLabel").pack(anchor="w")
         ttk.Label(t, text="Everything in _logs is confidential, not only the LINKAGE file: the per-file and per-study CSVs and the run logs "
                           "record the original folder paths. Move them out before the output folder leaves this computer.",
-                  wraplength=900, foreground="#6e7781").pack(anchor="w", pady=(2, 6))
+                  wraplength=900, style="Muted.TLabel").pack(anchor="w", pady=(2, 6))
         self.tv_checks = self._tree(t, [("mark", "", 28), ("title", "Check", 300), ("detail", "Detail", 500)], height=7)
         row = ttk.Frame(t)
         row.pack(fill="x", pady=8)
@@ -367,6 +394,7 @@ class App(tk.Tk):
     def _build_help_tab(self) -> None:
         t = self.tab_help
         txt = tk.Text(t, font=MONO, wrap="word", state="normal")
+        self.txt_help = txt
         ys = ttk.Scrollbar(t, orient="vertical", command=txt.yview)
         txt.configure(yscrollcommand=ys.set)
         try:
@@ -408,7 +436,8 @@ class App(tk.Tk):
                        input=self.v_input.get(), study_id=self.v_study_id.get(), mapping=self.v_mapping.get(),
                        current_col=self.v_current_col.get(), new_col=self.v_new_col.get(), sheet=self.v_sheet.get(),
                        match_on=self.v_match_on.get(), series_pick=self.v_series_pick.get(), ctca_only=self.v_ctca.get(),
-                       resume=self.v_resume.get(), keep_technical=self.v_keep_tech.get(), flat=self.v_flat.get(), dry_run=dry_run)
+                       resume=self.v_resume.get(), keep_technical=self.v_keep_tech.get(), flat=self.v_flat.get(), dry_run=dry_run,
+                       profile=self.v_profile.get())
 
     def _save_settings(self) -> None:
         model.spec_to_settings(self._spec(), self.settings)
@@ -430,6 +459,8 @@ class App(tk.Tk):
         for b in (self.b_dry, self.b_start, self.b_verify):
             b.state(["disabled"] if running else ["!disabled"])
         self.b_stop.state(["!disabled"] if running else ["disabled"])
+        if not running:
+            self._live_validate()
 
     # ================================================================== jobs
     def _start_job(self, job: str, args: list[str], log_name: str | None, title: str) -> None:
@@ -477,7 +508,7 @@ class App(tk.Tk):
         if not out or not out.is_dir():
             messagebox.showerror(APP_NAME, "Choose an existing output folder first.")
             return
-        args = ["verify", *model.verify_args(str(out), model.split_needles(self.v_needles.get()), self.v_keep_tech.get())]
+        args = ["verify", *model.verify_args(str(out), model.split_needles(self.v_needles.get()), self.v_keep_tech.get(), self.v_profile.get())]
         self._start_job("verify", args, "verify", "Output check")
 
     def _start_thick(self, fix: bool) -> None:
@@ -569,6 +600,77 @@ class App(tk.Tk):
         self.clipboard_append(self.log.get("1.0", "end"))
         self.v_status.set("Log copied to clipboard")
 
+    def _apply_theme_colours(self) -> None:
+        pal = theme.palette()
+        for w in (self.log, self.txt_verify, self.txt_help):
+            theme.style_text(w)
+        theme.tag_colours(self.log, ("error", "warn", "ok"))
+        for tv in (self.tv_series, self.tv_summary, self.tv_checks, self.tv_logs):
+            theme.tag_colours(tv, ("keep", "drop", "check", "block", "error", "ok", "warn"))
+        txt = self.lbl_verify.cget("text")
+        self.lbl_verify.configure(foreground=pal["ok"] if txt.startswith("PASS") else (pal["error"] if txt.startswith("FAIL") else pal["text"]))
+
+    def _toggle_theme(self) -> None:
+        self.theme_mode = theme.toggle(self)
+        self.settings.set("theme", self.theme_mode)
+        self.b_theme.configure(text="Dark" if self.theme_mode == "light" else "Light")
+        self._apply_theme_colours()
+        for w in self._viewers:
+            try:
+                w.apply_theme()
+            except (tk.TclError, AttributeError):
+                pass
+
+    def _watch_form(self) -> None:
+        self._validate_id: str | None = None
+        for v in (self.v_mode, self.v_output, self.v_manifest, self.v_remap, self.v_input, self.v_study_id, self.v_mapping,
+                  self.v_current_col, self.v_new_col, self.v_sheet, self.v_match_on, self.v_series_pick, self.v_profile):
+            v.trace_add("write", lambda *_: self._schedule_validate())
+        self._live_validate()
+
+    def _schedule_validate(self) -> None:
+        if self._validate_id:
+            self.after_cancel(self._validate_id)
+        self._validate_id = self.after(250, self._live_validate)
+
+    def _live_validate(self) -> None:
+        self._validate_id = None
+        problems = self._spec().validate()
+        running = bool(self.proc and self.proc.running)
+        if problems:
+            self.v_ready.set("Before you can start: " + "  ·  ".join(problems[:3]) + ("  ·  ..." if len(problems) > 3 else ""))
+            self.lbl_ready.configure(style="Warn.TLabel")
+        else:
+            self.v_ready.set("Ready. Preview first, then Anonymise.")
+            self.lbl_ready.configure(style="Ok.TLabel")
+        if not running:
+            for b in (self.b_dry, self.b_start):
+                b.state(["!disabled"] if not problems else ["disabled"])
+
+    def _refresh_profile_label(self) -> None:
+        self._profile_entries = model.list_profiles()
+        self.cb_profile["values"] = [e.label for e in self._profile_entries]
+        cur = self.v_profile.get().strip()
+        match = next((e for e in self._profile_entries if (str(e.path) if e.path else "") == cur), None)
+        if match is None:                       # a profile file that no longer exists: fall back to the default
+            match = self._profile_entries[0] if self._profile_entries else None
+            self.v_profile.set("")
+        if match:
+            self.v_profile_label.set(match.label)
+            self.v_profile_desc.set(match.profile.describe() + "  Written into every file as: " + match.profile.method_string(model.ENGINE_VERSION))
+            if hasattr(self, "v_status"):
+                self.v_status.set(self.v_profile_desc.get())
+
+    def _profile_chosen(self) -> None:
+        label = self.v_profile_label.get()
+        e = next((e for e in self._profile_entries if e.label == label), None)
+        if e:
+            self.v_profile.set(str(e.path) if e.path else "")
+            self._refresh_profile_label()
+
+    def _edit_profiles(self) -> None:
+        ProfileEditor(self, self.v_profile.get())
+
     def _viewer(self, mode: str, study_id: str | None = None) -> None:
         w = open_viewer(self, mode, study_id)
         if w is not None:
@@ -634,11 +736,11 @@ class App(tk.Tk):
         logs = self._logs()
         status, rep, txt = model.verify_status(logs) if logs and logs.is_dir() else (None, None, "")
         if status == "PASS":
-            self.lbl_verify.configure(text=f"PASS  ({rep.name})", foreground=COLOURS["ok"])
+            self.lbl_verify.configure(text=f"PASS  ({rep.name})", foreground=theme.palette()["ok"])
         elif status == "FAIL":
-            self.lbl_verify.configure(text=f"FAIL: residual identifiers found  ({rep.name})", foreground=COLOURS["error"])
+            self.lbl_verify.configure(text=f"FAIL: residual identifiers found  ({rep.name})", foreground=theme.palette()["error"])
         else:
-            self.lbl_verify.configure(text="Not checked yet.", foreground="")
+            self.lbl_verify.configure(text="Not checked yet.", foreground=theme.palette()["text"])
         self.txt_verify.configure(state="normal")
         self.txt_verify.delete("1.0", "end")
         self.txt_verify.insert("1.0", txt[-20000:])
@@ -733,7 +835,14 @@ class App(tk.Tk):
             if w is not None:
                 self.update()
                 w.destroy()
-        print("selftest: window built, all tabs drawn, viewer opened", flush=True)
+        ed = ProfileEditor(self, "")
+        self.update()
+        ed.lb.selection_clear(0, "end")
+        ed.lb.selection_set(1)
+        ed._pick()
+        self.update()
+        ed.destroy()
+        print("selftest: window built, all tabs drawn, viewer opened, profile editor opened", flush=True)
         self._selftest_viewer_on_synthetic_patients()
         self.after(200, self.destroy)
 

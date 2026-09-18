@@ -25,6 +25,7 @@ from tkinter import messagebox, ttk
 
 from . import model
 from . import preview as pv
+from . import theme
 
 MONO = ("Menlo", 11) if sys.platform == "darwin" else ("Consolas", 10)
 SMALL = ("Menlo", 10) if sys.platform == "darwin" else ("Consolas", 9)
@@ -104,7 +105,7 @@ class ViewerWindow(tk.Toplevel):
         # ---- left: series
         left = ttk.Frame(pane, padding=(0, 0, 6, 0))
         pane.add(left, weight=1)
-        ttk.Label(left, text="Series", font=("TkDefaultFont", 12, "bold")).pack(anchor="w")
+        ttk.Label(left, text="Series", style="H2.TLabel").pack(anchor="w")
         tvf = ttk.Frame(left)
         tvf.pack(fill="both", expand=True)
         self.tv = ttk.Treeview(tvf, columns=("no", "desc", "n", "mm", "kvp", "dec", "why"), show=("tree", "headings"), height=12, selectmode="browse")
@@ -119,9 +120,6 @@ class ViewerWindow(tk.Toplevel):
         self.tv.configure(yscrollcommand=ys.set)
         self.tv.pack(side="left", fill="both", expand=True)
         ys.pack(side="left", fill="y")
-        for tag, colour in COLOURS.items():
-            if colour:
-                self.tv.tag_configure(tag, foreground=colour)
         self.tv.bind("<<TreeviewSelect>>", lambda _e: self._select_series())
         lb = ttk.Frame(left)
         lb.pack(fill="x", pady=(6, 0))
@@ -204,7 +202,7 @@ class ViewerWindow(tk.Toplevel):
         for e in (e1, e2):
             e.bind("<Return>", lambda _e: self._manual_wl())
         ttk.Label(row, text="wheel / arrows: slices · cmd/ctrl-wheel or +/-: zoom · double-click: fit · right-drag: pan",
-                  foreground="#6e7781").pack(side="left")
+                  style="Muted.TLabel").pack(side="left")
         self.lbl_slice = ttk.Label(row, text="")
         self.lbl_slice.pack(side="right")
         red = ttk.Frame(ctl)
@@ -223,7 +221,7 @@ class ViewerWindow(tk.Toplevel):
         pane.add(right, weight=2)
         hdr = ttk.Frame(right)
         hdr.pack(fill="x")
-        self.lbl_header = ttk.Label(hdr, text="Header: before and after", font=("TkDefaultFont", 12, "bold"))
+        self.lbl_header = ttk.Label(hdr, text="Header: before and after", style="H2.TLabel")
         self.lbl_header.pack(side="left")
         ttk.Checkbutton(hdr, text="changed only", variable=self.v_changed_only, command=self._fill_header).pack(side="right")
         f = ttk.Entry(hdr, textvariable=self.v_filter, width=14)
@@ -240,13 +238,15 @@ class ViewerWindow(tk.Toplevel):
         self.th.configure(yscrollcommand=hys.set)
         self.th.pack(side="left", fill="both", expand=True)
         hys.pack(side="left", fill="y")
-        for tag, colour in COLOURS.items():
-            if colour:
-                self.th.tag_configure(tag, foreground=colour)
-        ttk.Label(right, textvariable=self.v_summary, foreground="#6e7781").pack(anchor="w", pady=(4, 0))
+        ttk.Label(right, textvariable=self.v_summary, style="Muted.TLabel").pack(anchor="w", pady=(4, 0))
 
         ttk.Label(self, textvariable=self.v_status, padding=(10, 4)).pack(fill="x")
+        self.apply_theme()
         self._redact_mode()
+
+    def apply_theme(self) -> None:
+        theme.tag_colours(self.tv, ("keep", "maybe", "drop", "review", "override"))
+        theme.tag_colours(self.th, ("removed", "changed", "added"))
 
     # ================================================================== patients and series
     @property
@@ -771,7 +771,7 @@ class ViewerWindow(tk.Toplevel):
                 salt = pv.PREVIEW_SALT
                 if self.out and (self.out / "_logs" / "uid_salt.txt").exists():
                     salt = (self.out / "_logs" / "uid_salt.txt").read_text().strip() or salt
-                rows = pv.header_diff(path, self._study_id(), salt, self.spec.keep_technical)
+                rows = pv.header_diff(path, self._study_id(), salt, self.spec.keep_technical, model.profile_for_path(self.spec.profile))
             else:
                 rows = pv.header_rows(path)
         except Exception as e:

@@ -53,7 +53,9 @@ try:
 except ImportError:
     sys.exit("pydicom is not installed. Run:  pip install pydicom")
 
-VERSION = "0.3.0"
+from scrubdicom.profiles import Profile, load_profile, shift_days_for, shift_da, shift_dt, age_years, age_bucket_5y
+
+VERSION = "0.4.0"
 DUMMY_DATE = "19000101"
 DUMMY_TIME = "111111.111111"
 DUMMY_DATETIME = "19000101111111.111111"
@@ -308,23 +310,27 @@ def is_review_object(ds: Dataset) -> str | None:
 # Core anonymisation of one dataset
 # ---------------------------------------------------------------------------
 
-def _walk(ds: Dataset, salt: str, stats: dict) -> None:
-    """Recursively apply date/time dummying and UID hashing to every element, including inside sequences."""
+def _walk(ds: Dataset, salt: str, stats: dict, shift_days: int | None = None) -> None:
+    """Recursively apply date/time dummying (or, for a profile that shifts dates, a per-patient secret offset)
+    and UID hashing to every element, including inside sequences."""
     for elem in list(ds):
         if elem.tag.is_private:
             continue  # removed wholesale afterwards
         vr = elem.VR
         if vr == "SQ":
             for item in elem.value:
-                _walk(item, salt, stats)
+                _walk(item, salt, stats, shift_days)
         elif vr == "DA":
-            elem.value = DUMMY_DATE if elem.value else elem.value
+            if elem.value:
+                elem.value = shift_da(elem.value, shift_days, DUMMY_DATE) if shift_days else DUMMY_DATE
             stats["dates"] += 1
         elif vr == "TM":
-            elem.value = DUMMY_TIME if elem.value else elem.value
+            if elem.value and not shift_days:      # with shifted dates the clock time is kept: intervals survive
+                elem.value = DUMMY_TIME
             stats["dates"] += 1
         elif vr == "DT":
-            elem.value = DUMMY_DATETIME if elem.value else elem.value
+            if elem.value:
+                elem.value = shift_dt(elem.value, shift_days, DUMMY_DATETIME) if shift_days else DUMMY_DATETIME
             stats["dates"] += 1
         elif vr == "UI":
             kw = elem.keyword
@@ -336,8 +342,15 @@ def _walk(ds: Dataset, salt: str, stats: dict) -> None:
             stats["uids"] += 1
 
 
-def anonymise_dataset(ds: Dataset, study_id: str, salt: str, keep_technical: bool = False) -> dict:
+def anonymise_dataset(ds: Dataset, study_id: str, salt: str, keep_technical: bool = False, profile: Profile | None = None) -> dict:
+    """Apply the tag policy to one dataset in place. `profile` may retain a few PS3.15-sanctioned attributes
+    (see scrubdicom.profiles); with no profile, or the default profile, behaviour is the validated v0.1 policy."""
     stats = {"dates": 0, "uids": 0, "removed": 0, "cleared": 0, "private": 0}
+    profile = profile or Profile()
+    keep_technical = keep_technical or profile.keep_technical
+    remove = REMOVE - profile.retained_remove()
+    clear = CLEAR - profile.retained_clear()
+    age = age_years(ds) if profile.keep_age_5y else None
 
     # 1. private tags: vendor and PACS blocks are where identifiers hide (referring clinician, true
     #    study datetime, age in days were all found in ELSCINT1 blocks of a previously "anonymised" file)
@@ -346,11 +359,11 @@ def anonymise_dataset(ds: Dataset, study_id: str, salt: str, keep_technical: boo
     stats["private"] = before - len(ds)
 
     # 2. explicit removals and clears
-    for kw in REMOVE:
+    for kw in remove:
         if kw in ds:
             del ds[kw]
             stats["removed"] += 1
-    for kw in CLEAR:
+    for kw in clear:
         if kw in ds:
             elem = ds[kw]
             if elem.VR == "SQ":
@@ -370,13 +383,17 @@ def anonymise_dataset(ds: Dataset, study_id: str, salt: str, keep_technical: boo
             ds.ImageType = list(ds.ImageType)[:3]
 
     # 3. dates, times, UIDs everywhere (top level and inside sequences)
-    _walk(ds, salt, stats)
+    _walk(ds, salt, stats, shift_days_for(salt, study_id) if profile.shift_dates else None)
 
     # 4. identity
-    ds.PatientName = study_id
+    ds.PatientName = profile.patient_name_for(study_id)
     ds.PatientID = study_id
+    if age is not None:
+        ds.PatientAge = age_bucket_5y(age)      # 5-year bucket; the birth date itself is already gone
+    if profile.study_description:
+        ds.StudyDescription = profile.study_description[:64]
     ds.PatientIdentityRemoved = "YES"
-    ds.DeidentificationMethod = DEID_METHOD
+    ds.DeidentificationMethod = profile.method_string(VERSION)
     ds.BurnedInAnnotation = "NO"
 
     # 5. file meta: must match the new SOP Instance UID; strip AE titles that name the sending PACS
@@ -567,6 +584,10 @@ def cmd_run(a: argparse.Namespace) -> int:
         (out / "_logs").mkdir(exist_ok=True)
     logs = out / "_logs"
 
+    profile = load_profile(getattr(a, "profile", None))
+    if not a.dry_run:
+        (logs / "profile.json").write_text(json.dumps(profile.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    log(f"Profile: {profile.name}. {profile.describe()}")
     mapping: dict[str, str] = {}
     if a.study_id:
         pass
@@ -628,7 +649,7 @@ def cmd_run(a: argparse.Namespace) -> int:
         series_no = str(ds.get("SeriesNumber", "0"))
         inst_no = str(ds.get("InstanceNumber", ""))
         try:
-            stats = anonymise_dataset(ds, study_id, salt, a.keep_technical)
+            stats = anonymise_dataset(ds, study_id, salt, a.keep_technical, profile)
         except Exception as e:
             rec["errors"] += 1
             file_rows.append([study_id, str(path), "", "ERROR", str(e)])
@@ -755,6 +776,10 @@ def run_manifest(a: argparse.Namespace) -> int:
         if not a.dry_run:
             salt_file.write_text(salt)
     run_ts = time.strftime("%Y%m%d_%H%M%S")
+    profile = load_profile(getattr(a, "profile", None))
+    if not a.dry_run:
+        (out / "_logs" / "profile.json").write_text(json.dumps(profile.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    log(f"Profile: {profile.name}. {profile.describe()}")
     summary, link_rows, file_rows, missing, series_rows, no_ctca, check_studies = [], [], [], [], [], [], []
     series_log = out / "_logs" / f"series_{run_ts}.csv"
     picks = load_series_picks(a.series_pick) if a.series_pick else {}
@@ -914,7 +939,7 @@ def run_manifest(a: argparse.Namespace) -> int:
             series_no = str(ds.get("SeriesNumber", "0") or "0")
             inst_no = str(ds.get("InstanceNumber", "") or "")
             try:
-                anonymise_dataset(ds, study_id, salt, a.keep_technical)
+                anonymise_dataset(ds, study_id, salt, a.keep_technical, profile)
             except Exception as e:
                 rec["errors"] += 1
                 file_rows.append([study_id, str(path), "", "ERROR", str(e)])
@@ -1046,6 +1071,17 @@ PN_KEYWORDS = ("PatientName", "ReferringPhysicianName", "PhysiciansOfRecord", "P
 
 def cmd_verify(a: argparse.Namespace) -> int:
     out = Path(a.output).resolve()
+    prof_path = getattr(a, "profile", None) or ((out / "_logs" / "profile.json") if (out / "_logs" / "profile.json").exists() else None)
+    profile = load_profile(prof_path)
+    keep_technical = a.keep_technical or profile.keep_technical
+    absent = ["PatientBirthDate", "OtherPatientIDs", "DeviceSerialNumber", "SoftwareVersions"] \
+        + ([] if profile.keep_sex else ["PatientSex"]) + ([] if profile.keep_age_5y else ["PatientAge"])
+    empty = ["StationName", "SeriesDescription", "ProtocolName", "AccessionNumber"] \
+        + ([] if profile.keep_institution else ["InstitutionName"]) \
+        + ([] if profile.keep_manufacturer else ["Manufacturer", "ManufacturerModelName"]) \
+        + ([] if profile.study_description else ["StudyDescription"])
+    if prof_path:
+        log(f"Verifying against profile: {profile.name}. {profile.describe()}")
     needles: set[str] = set()
     if a.mapping:
         needles |= {k for k in load_mapping(a.mapping, a.current_col, a.new_col, a.sheet).keys() if len(k) >= 4}
@@ -1085,11 +1121,11 @@ def cmd_verify(a: argparse.Namespace) -> int:
                 elif e.VR == "SQ":
                     for it in e.value:
                         walk(it, depth + 1)
-                elif e.VR == "DA" and e.value and e.value != DUMMY_DATE:
+                elif e.VR == "DA" and e.value and e.value != DUMMY_DATE and not profile.shift_dates:
                     flag("real date", f"{e.keyword}={e.value}")
-                elif e.VR == "DT" and e.value and not str(e.value).startswith(DUMMY_DATE):
+                elif e.VR == "DT" and e.value and not str(e.value).startswith(DUMMY_DATE) and not profile.shift_dates:
                     flag("real datetime", f"{e.keyword}={e.value}")
-                elif e.VR == "TM" and e.value and str(e.value) != DUMMY_TIME:
+                elif e.VR == "TM" and e.value and str(e.value) != DUMMY_TIME and not profile.shift_dates:
                     flag("real time", f"{e.keyword}={e.value}")
                 elif e.VR == "UI" and e.keyword not in UID_KEEP and e.value and not str(e.value).startswith(("2.25.", STANDARD_UID_PREFIX)):
                     flag("original UID", f"{e.keyword}={e.value}")
@@ -1102,21 +1138,25 @@ def cmd_verify(a: argparse.Namespace) -> int:
                             flag("identifier text", f"{e.keyword}={txt}")
 
         walk(ds)
-        for kw in ("PatientBirthDate", "PatientSex", "PatientAge", "OtherPatientIDs", "DeviceSerialNumber", "SoftwareVersions"):
+        for kw in absent:
             if kw in ds:
                 flag("attribute should be absent", kw)
-        for kw in ("InstitutionName", "Manufacturer", "ManufacturerModelName", "StationName", "SeriesDescription",
-                   "StudyDescription", "ProtocolName", "AccessionNumber"):
+        for kw in empty:
             if kw in ds and str(ds[kw].value):
                 flag("attribute should be empty", f"{kw}={ds[kw].value}")
+        if profile.study_description and str(ds.get("StudyDescription", "")) not in ("", profile.study_description[:64]):
+            flag("attribute should match profile", f"StudyDescription={ds.StudyDescription}")
+        if profile.keep_age_5y and "PatientAge" in ds and not re.fullmatch(r"\d{3}Y", str(ds.PatientAge)):
+            flag("age not bucketed", f"PatientAge={ds.PatientAge}")
         for kw in ("ConvolutionKernel", "ScanOptions", "FilterType"):
-            if kw in ds and str(ds[kw].value) and not a.keep_technical:
+            if kw in ds and str(ds[kw].value) and not keep_technical:
                 flag("vendor hint present", f"{kw}={ds[kw].value}")
         for kw in PN_KEYWORDS:
             if kw in ds and kw != "PatientName" and str(ds[kw].value):
                 flag("person name present", f"{kw}={ds[kw].value}")
-        if str(ds.get("PatientName", "")) != str(ds.get("PatientID", "")):
-            flag("PatientName != PatientID", f"{ds.get('PatientName')} / {ds.get('PatientID')}")
+        expected_name = profile.patient_name_for(str(ds.get("PatientID", "")))
+        if str(ds.get("PatientName", "")) != expected_name:
+            flag("PatientName not as profile dictates", f"{ds.get('PatientName')} / expected {expected_name}")
         if str(ds.get("PatientIdentityRemoved", "")) != "YES":
             flag("PatientIdentityRemoved not YES", "")
 
@@ -1204,6 +1244,7 @@ def main(argv=None):
     r.add_argument("--flat", action="store_true", help="one folder per study with no per-series subfolders")
     r.add_argument("--linkage-log", help="where to write the confidential linkage CSV (default: <output>/_logs/)")
     r.add_argument("--salt", help="fixed UID salt (default: random, saved in <output>/_logs/uid_salt.txt for re-runs)")
+    r.add_argument("--profile", help="de-identification profile JSON (see scrubdicom.profiles); default = full blind")
     r.add_argument("--dry-run", action="store_true", help="scan and report, write nothing")
     r.set_defaults(func=cmd_run)
 
@@ -1215,6 +1256,7 @@ def main(argv=None):
     v.add_argument("--sheet")
     v.add_argument("--needle", action="append", help="extra string that must not appear (repeatable), e.g. a surname")
     v.add_argument("--keep-technical", action="store_true", help="do not flag vendor-specific technical fields")
+    v.add_argument("--profile", help="profile the output was made with (default: <output>/_logs/profile.json if present)")
     v.add_argument("--max-examples", type=int, default=10)
     v.add_argument("--log-file", help="also append everything printed to this file")
     v.set_defaults(func=cmd_verify)

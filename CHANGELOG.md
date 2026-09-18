@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0 (2026-09-18)
+De-identification profiles and a refreshed interface.
+- Profiles (`scrubdicom/profiles.py`): a named set of PS3.15-sanctioned options a user may retain (sex, 5-year age
+  bucket, weight/height, dates shifted by a secret per-patient offset, scanner make/model, technical fields,
+  institution name) and replacement values (patient name, study description, method text). The floor (private
+  tags, UIDs, physicians, accession, comments, addresses) cannot be switched off. Built-in profiles: blinded read
+  (default, identical to the validated policy), longitudinal follow-up, patient characteristics, scanner/technical.
+  `run --profile x.json`; the profile is written to `_logs/profile.json` and into DeidentificationMethod; `verify`
+  reads it and checks what the profile promised. Every option has a fixture-backed test.
+- App: profile picker on the Anonymise tab and an editor (built-ins read-only; copy, edit, save your own). The
+  viewer's header before/after follows the chosen profile.
+- Interface: Sun Valley theme (light/dark, follows the system, toggle in the header), header bar, live validation
+  that says what is missing and enables Anonymise only when the form is complete.
+- Tests 51 -> 61.
+
 ## 0.3.0 (2026-09-18)
 In-app DICOM viewer.
 - Preview before committing: the "Original scans" view shows every series with its keep/drop decision and a

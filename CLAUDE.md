@@ -12,18 +12,23 @@ thing not to break. Read `README.md`, `CHANGELOG.md` and `docs/tag_policy.md` be
 - Nothing in the output may identify patient, centre or scanner (blinded multi-diagnosis reader study).
 - Dates are dummied (`19000101` / `111111.111111`), never shifted; UIDs are regenerated deterministically from a salt.
 - `--ctca-only` keeps series <= `MAX_SLICE_MM` (0.8, i.e. 0.75 mm and thinner). Do not raise it without asking.
+- Profiles may only *retain* PS3.15 retain-option attributes (see `scrubdicom/profiles.py`). Never add an option
+  that keeps a private tag, a UID, a name, an accession number, a comment or an address. The default profile must
+  stay identical to the validated policy (`test_default_profile_matches_no_profile`).
 - Runs are long (hours) on external drives that fail: keep the resume markers, drive-loss stop, watchdog,
   `skip_files.txt`, built-in keep-awake, and Windows path handling (`--remap`, long paths, trailing-space folders).
 - Must work on macOS and Windows without extra steps beyond Python. Test both code paths when touching paths.
 
 ## Layout
 - `scrubdicom/core.py`     engine + CLI (`run`, `verify`, `thick`)
+- `scrubdicom/profiles.py` de-identification profiles: the only knobs a user may turn (PS3.15 retain options +
+                           replacement texts). The floor cannot be switched off. Every option has a test.
 - `scrubdicom/survey.py`   standalone series survey / select
 - `scrubdicom/fixtures.py` synthetic test patients with planted identifiers (no real data anywhere in the repo)
 - `scrubdicom/app/`       desktop app: `model.py` logic (no Tk, unit-tested), `runner.py` engine child process,
                            `ui.py` the Tk window, `preview.py` viewer logic (scan, header diff, pixels, redaction,
-                           reformats; no Tk), `viewer.py` the viewer window, `__init__.py` entry with `--cli`
-                           re-entry and `--selftest`
+                           reformats; no Tk), `viewer.py` the viewer window, `profile_ui.py` profile editor,
+                           `theme.py` Sun Valley light/dark theme, `__init__.py` entry with `--cli` and `--selftest`
 - `scrubdicom/dashboard/`  Streamlit dashboard (v0.1: developer-grade; binds 127.0.0.1, telemetry off)
 - `packaging/`             PyInstaller spec, macOS/Windows build scripts, Inno Setup script, icons
 - `launchers/`             double-click RUN_ME.command / RUN_ME.bat templates

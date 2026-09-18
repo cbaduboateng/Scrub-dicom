@@ -19,6 +19,7 @@ ICON = ROOT / "packaging" / "icons" / ("icon.icns" if sys.platform == "darwin" e
 
 from PyInstaller.utils.hooks import collect_all
 gdcm_datas, gdcm_binaries, gdcm_hidden = collect_all("gdcm")
+sv_datas, sv_binaries, sv_hidden = collect_all("sv_ttk")
 
 if sys.platform == "darwin":
     # The bootloader and python.org's Python are universal2 and are built that way (a single-architecture
@@ -38,11 +39,11 @@ if sys.platform == "darwin":
 a = Analysis(
     [str(ROOT / "packaging" / "entry.py")],
     pathex=[str(ROOT)],
-    binaries=gdcm_binaries,
-    datas=[(str(ROOT / "scrubdicom" / "app" / "HELP.txt"), "scrubdicom/app")] + gdcm_datas,
+    binaries=gdcm_binaries + sv_binaries,
+    datas=[(str(ROOT / "scrubdicom" / "app" / "HELP.txt"), "scrubdicom/app")] + gdcm_datas + sv_datas,
     hiddenimports=["scrubdicom.core", "scrubdicom.app.ui", "scrubdicom.app.model", "scrubdicom.app.runner",
-                   "scrubdicom.app.preview", "scrubdicom.app.viewer", "openpyxl", "numpy", "gdcm",
-                   "pydicom.pixels.decoders.gdcm", "pydicom.pixels.decoders.rle"] + gdcm_hidden,
+                   "scrubdicom.app.preview", "scrubdicom.app.viewer", "scrubdicom.app.profile_ui", "scrubdicom.app.theme", "scrubdicom.profiles", "openpyxl", "numpy", "gdcm",
+                   "pydicom.pixels.decoders.gdcm", "pydicom.pixels.decoders.rle", "sv_ttk"] + gdcm_hidden + sv_hidden,
     hookspath=[],
     runtime_hooks=[],
     # The engine needs pydicom only; the viewer adds numpy and GDCM (Apache-2.0) for compressed pixel data.

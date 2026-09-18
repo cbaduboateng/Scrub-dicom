@@ -23,6 +23,7 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
 from scrubdicom.core import VERSION as ENGINE_VERSION, MAX_SLICE_MM
+from scrubdicom.profiles import BUILTIN, Profile, load_profile
 
 APP_NAME = "Scrub-DICOM"
 APP_VERSION = ENGINE_VERSION
@@ -92,6 +93,7 @@ class JobSpec:
     keep_technical: bool = False
     flat: bool = False
     dry_run: bool = False
+    profile: str = ""          # path to a profile JSON; "" = the default full-blind profile
 
     def validate(self) -> list[str]:
         p: list[str] = []
@@ -122,6 +124,8 @@ class JobSpec:
                     p.append("Choose the mapping file (CSV or XLSX).")
                 elif not Path(self.mapping).is_file():
                     p.append(f"Mapping file not found: {self.mapping}")
+        if self.profile.strip() and not Path(self.profile).is_file():
+            p.append(f"Profile file not found: {self.profile}")
         if self.output.strip() and self.mode != "manifest" and self.input.strip():
             try:
                 out, inp = Path(self.output).resolve(), Path(self.input).resolve()
@@ -163,6 +167,8 @@ class JobSpec:
             a.append("--keep-technical")
         if self.flat:
             a.append("--flat")
+        if self.profile.strip():
+            a += ["--profile", self.profile.strip()]
         if self.dry_run:
             a.append("--dry-run")
         return a
@@ -171,8 +177,10 @@ class JobSpec:
         return engine_command(["run", *self.run_args()])
 
 
-def verify_args(output: str, needles: list[str], keep_technical: bool = False) -> list[str]:
+def verify_args(output: str, needles: list[str], keep_technical: bool = False, profile: str = "") -> list[str]:
     a = ["--output", output.strip()]
+    if profile.strip():
+        a += ["--profile", profile.strip()]
     for n in needles:
         n = n.strip()
         if n:
@@ -492,12 +500,12 @@ def move_logs_out(out: Path, dest_parent: Path) -> tuple[list[Path], Path]:
 SETTINGS_KEYS = {
     # paths the user chose, and booleans. Nothing that identifies a patient is ever written here.
     "mode", "output", "manifest", "remap", "input", "mapping", "current_col", "new_col", "sheet", "match_on",
-    "series_pick", "ctca_only", "resume", "keep_technical", "flat", "verify_after_run", "show_all_lines", "geometry",
+    "series_pick", "ctca_only", "resume", "keep_technical", "flat", "verify_after_run", "show_all_lines", "geometry", "profile", "theme",
 }
 _DEFAULTS = {
     "mode": "manifest", "output": "", "manifest": "", "remap": "", "input": "", "mapping": "", "current_col": "",
     "new_col": "", "sheet": "", "match_on": "patientid", "series_pick": "", "ctca_only": True, "resume": True,
-    "keep_technical": False, "flat": False, "verify_after_run": True, "show_all_lines": False, "geometry": "",
+    "keep_technical": False, "flat": False, "verify_after_run": True, "show_all_lines": False, "geometry": "", "profile": "", "theme": "",
 }
 
 
@@ -541,13 +549,84 @@ class Settings:
         return JobSpec(mode=v["mode"], output=v["output"], manifest=v["manifest"], remap=v["remap"], input=v["input"],
                        mapping=v["mapping"], current_col=v["current_col"], new_col=v["new_col"], sheet=v["sheet"],
                        match_on=v["match_on"], series_pick=v["series_pick"], ctca_only=v["ctca_only"], resume=v["resume"],
-                       keep_technical=v["keep_technical"], flat=v["flat"])
+                       keep_technical=v["keep_technical"], flat=v["flat"], profile=v.get("profile", ""))
 
 
 def spec_to_settings(spec: JobSpec, settings: Settings) -> None:
     for k, v in asdict(spec).items():
         if k in SETTINGS_KEYS and k != "study_id":
             settings.set(k, v)
+
+
+# ---------------------------------------------------------------------------------------------- profiles
+
+def profiles_dir() -> Path:
+    return settings_path().parent / "profiles"
+
+
+def slug(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_").lower() or "profile"
+
+
+@dataclass
+class ProfileEntry:
+    key: str            # "builtin:<k>" or "user:<file stem>"
+    profile: Profile
+    path: Path | None   # None for the default profile (runs without --profile); a file otherwise
+    builtin: bool
+
+    @property
+    def label(self) -> str:
+        return self.profile.name + ("" if self.builtin else "  (yours)")
+
+
+def list_profiles() -> list[ProfileEntry]:
+    """Built-in profiles first (materialised as files in the profiles folder so the engine can read them), then
+    the user's own JSON files."""
+    out: list[ProfileEntry] = []
+    d = profiles_dir()
+    for k, p in BUILTIN.items():
+        path = None
+        if not p.is_default():
+            path = d / f"builtin_{k}.json"
+            try:
+                if not path.exists() or load_profile(path) != p:
+                    p.save(path)
+            except (OSError, SystemExit):
+                path = None
+        out.append(ProfileEntry(f"builtin:{k}", p, path, True))
+    try:
+        for f in sorted(d.glob("*.json")):
+            if f.name.startswith("builtin_"):
+                continue
+            try:
+                out.append(ProfileEntry(f"user:{f.stem}", load_profile(f), f, False))
+            except SystemExit:
+                continue
+    except OSError:
+        pass
+    return out
+
+
+def save_user_profile(p: Profile, existing: Path | None = None) -> Path:
+    problems = p.validate()
+    if problems:
+        raise ValueError("; ".join(problems))
+    path = existing if existing and not existing.name.startswith("builtin_") else profiles_dir() / f"{slug(p.name)}.json"
+    return p.save(path)
+
+
+def delete_user_profile(path: Path) -> None:
+    path = Path(path)
+    if path.parent == profiles_dir() and not path.name.startswith("builtin_"):
+        path.unlink(missing_ok=True)
+
+
+def profile_for_path(path: str) -> Profile:
+    try:
+        return load_profile(path) if path.strip() else Profile()
+    except SystemExit:
+        return Profile()
 
 
 def about_text() -> str:

@@ -185,13 +185,13 @@ def _flatten(ds: Dataset, prefix: str = "") -> dict[str, tuple[str, str, str]]:
     return out
 
 
-def header_diff(path: Path, study_id: str, salt: str = PREVIEW_SALT, keep_technical: bool = False) -> list[DiffRow]:
+def header_diff(path: Path, study_id: str, salt: str = PREVIEW_SALT, keep_technical: bool = False, profile=None) -> list[DiffRow]:
     """Read one file's header, run the real anonymise_dataset on an in-memory copy, and list every tag with what
     happened to it. The file on disk is not touched."""
     ds = pydicom.dcmread(str(path), stop_before_pixels=True, force=True)
     before = _flatten(ds)
     anon = copy.deepcopy(ds)
-    anonymise_dataset(anon, study_id, salt, keep_technical)
+    anonymise_dataset(anon, study_id, salt, keep_technical, profile)
     after = _flatten(anon)
     rows: list[DiffRow] = []
     for key, (kw, vr, val) in before.items():

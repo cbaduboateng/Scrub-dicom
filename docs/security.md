@@ -51,6 +51,27 @@ app's "Logs & sharing" tab enforces this. "Move confidential logs out" relocates
 `uid_salt.txt` and PASS verify reports to a folder you choose outside the output tree, and "Ready to
 share?" blocks while a linkage file is anywhere under the output folder or verify has not passed.
 
+## Profiles: what may be retained, and what never is
+
+Since 0.4.0 a run can use a de-identification profile. A profile can only retain attributes that DICOM
+PS3.15 Annex E lists as retain-able options: patient characteristics (sex, age bucketed to 5 years,
+weight, height), longitudinal temporal information *with modification* (dates shifted by a secret
+per-patient offset derived from the UID salt; clock times kept), device identity (make and model,
+technical fields) and institution identity (name only). It can also choose the patient name text, the
+study description text and the method text. The default profile retains nothing and is the validated
+policy.
+
+In every profile, without exception: private tags, original UIDs, physician and operator names,
+accession and order numbers, addresses, comments, other patient IDs, device serial numbers, software
+versions and PACS AE titles are removed. `tests/test_profiles.py` asserts this for a profile with every
+option ticked. The profile used is written into each file's DeidentificationMethod and into
+`_logs/profile.json`, and `verify` checks the output against that profile rather than the default, so
+a retained attribute is never mistaken for a leak and a leak is never excused by a profile.
+
+Shifted dates: the offset is 1 to 3650 days backwards, deterministic per (salt, study ID), so a patient's
+files and re-runs agree and intervals between studies survive. Without the salt the offset cannot be
+recovered. The original dates remain in the linkage log and are used as verify needles.
+
 ## The operator's responsibilities
 
 The software cannot do these for you.

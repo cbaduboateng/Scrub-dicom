@@ -9,6 +9,7 @@ What it does
   separate process, and shows you its output.
 
 The four tabs are the four steps, in order: Anonymise, Check series, Verify output, Share safely.
+The Dark / Light button in the header switches the look; it follows the system setting at first launch.
 
 TAB 1  ANONYMISE
 
@@ -39,6 +40,15 @@ TAB 1  ANONYMISE
                                                  name identifies the scanner make.
     One folder per patient                       no per-series sub-folders.
     Check the output automatically when done     leave on.
+
+  De-identification profile   what to keep beyond the default. "Blinded read" (the default) removes everything
+                              identifying. Other profiles may keep sex, a 5-year age bucket, weight/height, dates
+                              shifted by a secret per-patient offset, scanner make/model, technical fields, or the
+                              institution name, and may set the patient name, study description and method text.
+                              Private tags, UIDs, physicians, accession numbers, comments and addresses are always
+                              removed. "Edit profiles..." copies a built-in and lets you tick what you need. The
+                              profile is written into every file and into _logs/profile.json; Verify checks the
+                              output against it.
 
   Buttons
     Preview (writes nothing)   scans and reports what would be written. Do this first with a new list.

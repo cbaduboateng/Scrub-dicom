@@ -85,7 +85,9 @@ The app is a plain window that wraps the same engine: choose a manifest or folde
 start, watch progress, stop; review series decisions; run verify with your own needles; and a "Ready to share?"
 check that moves the confidential logs out of the output tree. A built-in DICOM viewer previews exactly what a run
 will do to each patient (series decisions, images, header before/after) and, afterwards, lets you redact burned-in
-text in quarantined files and release them. It never connects to the internet. User guide:
+text in quarantined files and release them. De-identification profiles let a study keep, for example, sex and a
+5-year age bucket or shifted dates, within the limits DICOM PS3.15 allows; the default removes everything. It never
+connects to the internet. User guide:
 [docs/app_user_guide.md](docs/app_user_guide.md). From source: `pip install -e .` then `scrub-dicom-app`.
 
 ### Developer dashboard
