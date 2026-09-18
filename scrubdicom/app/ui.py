@@ -285,7 +285,7 @@ class App(tk.Tk):
         box = ttk.Frame(t, padding=(24, 28, 24, 12))
         box.pack(fill="both", expand=True)
         ttk.Label(box, text="Scrub-DICOM", font=("TkDefaultFont", 30, "bold")).pack(anchor="w")
-        ttk.Label(box, text="Pseudonymise cardiac CT for blinded research reads.", font=("TkDefaultFont", 16)).pack(anchor="w", pady=(4, 0))
+        ttk.Label(box, text="Pseudonymise DICOM studies for blinded research reads. Built and validated on cardiac CT.", font=("TkDefaultFont", 16)).pack(anchor="w", pady=(4, 0))
         ttk.Label(box, text="Originals are never modified  ·  every output is checked before it is shared  ·  no network", style="Muted.TLabel").pack(anchor="w", pady=(4, 28))
         tiles = ttk.Frame(box)
         tiles.pack(anchor="w")

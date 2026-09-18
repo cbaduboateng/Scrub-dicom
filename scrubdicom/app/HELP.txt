@@ -1,8 +1,10 @@
 SCRUB-DICOM: HOW TO USE THIS APP
 
 What it does
-  Takes a folder (or many folders) of cardiac CT exports and writes a separate, pseudonymised copy in which
-  nothing in the header identifies the patient, the hospital or the scanner. The original scans are never
+  Takes a folder (or many folders) of DICOM exports and writes a separate, pseudonymised copy in which nothing in
+  the header identifies the patient, the hospital or the scanner. The header rules apply to any modality; the tool
+  was built and validated on cardiac CT, and "Coronary series only" and the slice-thickness audit are CT rules.
+  Ultrasound and angiography often carry names burned into the pixels: check those in the viewer and redact. The original scans are never
   touched. Every output file is checked before you share anything.
 
   This app never connects to the internet. It starts the same engine the command line uses, as a

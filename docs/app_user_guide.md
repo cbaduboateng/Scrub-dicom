@@ -1,5 +1,10 @@
 # Scrub-DICOM desktop app: user guide
 
+Scrub-DICOM pseudonymises DICOM studies for blinded research reads. The header rules apply to any
+modality; the tool was built and validated on cardiac CT, and "Coronary series only" and the
+slice-thickness audit are CT-specific. Ultrasound and angiography often carry names burned into the
+pixels: check those in the viewer and redact before sharing.
+
 For the person running the anonymisation. No Python, no terminal. If you are the developer, see
 `packaging/README.md` for how the app is built.
 
