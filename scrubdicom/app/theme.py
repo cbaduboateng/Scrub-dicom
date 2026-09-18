@@ -66,6 +66,8 @@ def apply(root: tk.Misc, mode: str | None = None) -> str:
     style.configure("Warn.TLabel", foreground=pal["warn"])
     style.configure("Error.TLabel", foreground=pal["error"])
     style.configure("Big.TLabel", font=("TkDefaultFont", 14, "bold"))
+    style.configure("Tile.TButton", font=("TkDefaultFont", 16))
+    style.configure("Tile.Accent.TButton", font=("TkDefaultFont", 16, "bold"))
     return _current
 
 

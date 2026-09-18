@@ -294,17 +294,17 @@ class App(tk.Tk):
         box.rowconfigure(3, weight=1)                 # the space between the card and the step strip absorbs extra height
         head = ttk.Frame(box)
         head.grid(row=0, column=0, sticky="ew")
-        ttk.Label(head, text="Scrub-DICOM", font=("TkDefaultFont", 30, "bold")).pack(anchor="w")
-        ttk.Label(head, text="Pseudonymise DICOM studies for blinded research reads. Built and validated on cardiac CT.", font=("TkDefaultFont", 16), wraplength=COL).pack(anchor="w", pady=(4, 0))
-        ttk.Label(head, text="Originals are never modified  ·  every output is checked before it is shared  ·  no network", style="Muted.TLabel").pack(anchor="w", pady=(6, 0))
+        ttk.Label(head, text="Pseudonymise DICOM studies for blinded research reads.", font=("TkDefaultFont", 22, "bold"), wraplength=COL).pack(anchor="w")
+        ttk.Label(head, text="Built and validated on cardiac CT. Every output is checked before it is shared.", font=("TkDefaultFont", 14), style="Muted.TLabel", wraplength=COL).pack(anchor="w", pady=(6, 0))
         tiles = ttk.Frame(box)
-        tiles.grid(row=1, column=0, sticky="ew", pady=(40, 0))
+        tiles.grid(row=1, column=0, sticky="ew", pady=(36, 0))
         for i in range(3):
             tiles.columnconfigure(i, weight=1, uniform="tile")
-        for i, (text, cmd, style) in enumerate((("Start\nanonymise scans", lambda: self._goto_step(0), accent),
-                                                ("Try it\non two sample patients", self._run_demo, ""),
-                                                ("Viewer\nlook at scans and headers", lambda: self._viewer("source"), ""))):
-            ttk.Button(tiles, text=text, style=style, command=cmd).grid(row=0, column=i, sticky="ew", padx=(0 if i == 0 else 7, 0 if i == 2 else 7), ipady=22)
+        tile, tile_accent = theme.style_or("Tile.TButton"), theme.style_or("Tile.Accent.TButton", accent)
+        for i, (text, cmd, style) in enumerate((("Start\nanonymise scans", lambda: self._goto_step(0), tile_accent),
+                                                ("Try it\non two sample patients", self._run_demo, tile),
+                                                ("Viewer\nscans and headers", lambda: self._viewer("source"), tile))):
+            ttk.Button(tiles, text=text, style=style, command=cmd).grid(row=0, column=i, sticky="ew", padx=(0 if i == 0 else 8, 0 if i == 2 else 8), ipady=38)
         self.v_home_recent = tk.StringVar(value="")
         recent = ttk.LabelFrame(box, text="Where you left off", padding=(14, 8, 14, 12))
         recent.grid(row=2, column=0, sticky="ew", pady=(36, 0))
