@@ -280,24 +280,35 @@ class App(tk.Tk):
 
     # ------------------------------------------------------------------ home
     def _build_home_tab(self) -> None:
+        """A single centred column, as wide as the three action buttons, with a steady vertical rhythm."""
         t = self.tab_home
         accent = theme.style_or("Accent.TButton")
-        box = ttk.Frame(t, padding=(24, 28, 24, 12))
-        box.pack(fill="both", expand=True)
-        ttk.Label(box, text="Scrub-DICOM", font=("TkDefaultFont", 30, "bold")).pack(anchor="w")
-        ttk.Label(box, text="Pseudonymise DICOM studies for blinded research reads. Built and validated on cardiac CT.", font=("TkDefaultFont", 16)).pack(anchor="w", pady=(4, 0))
-        ttk.Label(box, text="Originals are never modified  ·  every output is checked before it is shared  ·  no network", style="Muted.TLabel").pack(anchor="w", pady=(4, 28))
+        COL = 840
+        t.columnconfigure(0, weight=1)
+        t.columnconfigure(2, weight=1)
+        t.rowconfigure(0, weight=1)
+        box = ttk.Frame(t, width=COL, padding=(0, 24, 0, 12))
+        box.grid(row=0, column=1, sticky="ns")
+        box.grid_propagate(False)
+        box.columnconfigure(0, weight=1)
+        box.rowconfigure(3, weight=1)                 # the space between the card and the step strip absorbs extra height
+        head = ttk.Frame(box)
+        head.grid(row=0, column=0, sticky="ew")
+        ttk.Label(head, text="Scrub-DICOM", font=("TkDefaultFont", 30, "bold")).pack(anchor="w")
+        ttk.Label(head, text="Pseudonymise DICOM studies for blinded research reads. Built and validated on cardiac CT.", font=("TkDefaultFont", 16), wraplength=COL).pack(anchor="w", pady=(4, 0))
+        ttk.Label(head, text="Originals are never modified  ·  every output is checked before it is shared  ·  no network", style="Muted.TLabel").pack(anchor="w", pady=(6, 0))
         tiles = ttk.Frame(box)
-        tiles.pack(anchor="w")
-        for text, cmd, style in (("Start\nanonymise scans", lambda: self._goto_step(0), accent),
-                                 ("Try it\non two sample patients", self._run_demo, ""),
-                                 ("Viewer\nlook at scans and headers", lambda: self._viewer("source"), "")):
-            b = ttk.Button(tiles, text=text, width=26, style=style, command=cmd)
-            b.pack(side="left", padx=(0, 14), ipady=22)
+        tiles.grid(row=1, column=0, sticky="ew", pady=(40, 0))
+        for i in range(3):
+            tiles.columnconfigure(i, weight=1, uniform="tile")
+        for i, (text, cmd, style) in enumerate((("Start\nanonymise scans", lambda: self._goto_step(0), accent),
+                                                ("Try it\non two sample patients", self._run_demo, ""),
+                                                ("Viewer\nlook at scans and headers", lambda: self._viewer("source"), ""))):
+            ttk.Button(tiles, text=text, style=style, command=cmd).grid(row=0, column=i, sticky="ew", padx=(0 if i == 0 else 7, 0 if i == 2 else 7), ipady=22)
         self.v_home_recent = tk.StringVar(value="")
         recent = ttk.LabelFrame(box, text="Where you left off", padding=(14, 8, 14, 12))
-        recent.pack(fill="x", pady=(32, 0))
-        ttk.Label(recent, textvariable=self.v_home_recent, wraplength=880, justify="left").pack(anchor="w")
+        recent.grid(row=2, column=0, sticky="ew", pady=(36, 0))
+        ttk.Label(recent, textvariable=self.v_home_recent, wraplength=COL - 40, justify="left").pack(anchor="w")
         rb = ttk.Frame(recent)
         rb.pack(anchor="w", pady=(8, 0))
         self.b_home_continue = ttk.Button(rb, text="Continue", command=lambda: self._goto_step(2))
@@ -305,13 +316,15 @@ class App(tk.Tk):
         ttk.Button(rb, text="Share safely", command=lambda: self.nb.select(self.tab_share)).pack(side="left", padx=(8, 0))
         ttk.Button(rb, text="Open output folder", command=lambda: self._open(self._out())).pack(side="left", padx=(8, 0))
         steps = ttk.Frame(box)
-        steps.pack(anchor="w", pady=(28, 0))
+        steps.grid(row=4, column=0, sticky="ew", pady=(40, 0))
+        for i in range(4):
+            steps.columnconfigure(i, weight=1, uniform="step")
         for i, (title, text) in enumerate((("1  Anonymise", "point it at the scans, preview, go"), ("2  Check series", "what was kept, what was dropped"),
                                             ("3  Verify output", "every file re-read for identifiers"), ("4  Share safely", "move the linking logs out, hand over"))):
-            f = ttk.Frame(steps, padding=(0, 0, 28, 0))
-            f.pack(side="left")
+            f = ttk.Frame(steps)
+            f.grid(row=0, column=i, sticky="nw", padx=(0, 12))
             ttk.Label(f, text=title, style="H2.TLabel").pack(anchor="w")
-            ttk.Label(f, text=text, style="Muted.TLabel").pack(anchor="w")
+            ttk.Label(f, text=text, style="Muted.TLabel", wraplength=190, justify="left").pack(anchor="w", pady=(2, 0))
 
     def _refresh_home(self) -> None:
         out = self._out()
