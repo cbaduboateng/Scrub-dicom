@@ -642,7 +642,9 @@ def external_viewer_command(target: Path, app_path: str = "") -> list[str] | Non
 
 
 def find_applications(extra_dirs: list[Path] | None = None) -> list[tuple[str, Path]]:
-    """(name, path) of installed applications: macOS .app bundles in the usual folders (extra_dirs for tests)."""
+    """(name, path) of installed applications. macOS: the usual folders plus everything Spotlight knows as an
+    application bundle, so apps in sub-folders (e.g. /Applications/Vendor/X.app) or in Downloads appear too.
+    extra_dirs restricts the search (tests)."""
     dirs = extra_dirs if extra_dirs is not None else [Path("/Applications"), Path("/Applications/Utilities"), Path.home() / "Applications", Path("/System/Applications")]
     found: dict[str, Path] = {}
     for d in dirs:
@@ -652,6 +654,16 @@ def find_applications(extra_dirs: list[Path] | None = None) -> list[tuple[str, P
                     found.setdefault(p.stem, p)
         except OSError:
             continue
+    if extra_dirs is None and sys.platform == "darwin":
+        import subprocess
+        try:
+            r = subprocess.run(["mdfind", "kMDItemContentType == 'com.apple.application-bundle'"], capture_output=True, text=True, timeout=8)
+            for line in r.stdout.splitlines():
+                p = Path(line.strip())
+                if p.suffix == ".app" and p.is_dir() and "/Contents/" not in str(p) and "Uninstall" not in p.stem:
+                    found.setdefault(p.stem, p)
+        except (OSError, subprocess.SubprocessError):
+            pass
     return sorted(found.items(), key=lambda t: t[0].lower())
 
 
