@@ -41,7 +41,7 @@ class ViewerWindow(tk.Toplevel):
         super().__init__(app)
         self.app = app
         self.title("Scrub-DICOM viewer")
-        self.minsize(1220, 740)
+        self.minsize(1280, 740)
         self.geometry("1400x860")
         self.spec = app._spec()
         self.out: Path | None = app._out()
@@ -93,8 +93,8 @@ class ViewerWindow(tk.Toplevel):
             self.update_idletasks()
             total = self.pane.winfo_width()
             if total > 900:
-                self.pane.sashpos(0, 280)
-                self.pane.sashpos(1, total - 390)
+                self.pane.sashpos(0, 360)
+                self.pane.sashpos(1, total - 380)
         except tk.TclError:
             pass
 
@@ -130,15 +130,15 @@ class ViewerWindow(tk.Toplevel):
         ttk.Label(left, text="Series", style="H2.TLabel").pack(anchor="w")
         tvf = ttk.Frame(left)
         tvf.pack(fill="both", expand=True)
-        self.tv = ttk.Treeview(tvf, columns=("tick", "no", "desc", "n", "mm", "kvp", "dec", "why"), show=("tree", "headings"), height=12, selectmode="browse")
+        self.tv = ttk.Treeview(tvf, columns=("tick", "no", "desc", "n", "dec"), show=("tree", "headings"), height=12, selectmode="browse")
         self.tv.column("#0", width=72, minwidth=72, stretch=False)
         self.tv.heading("#0", text="")
         self.tv.heading("tick", text="Use")
-        self.tv.column("tick", width=36, minwidth=36, stretch=False, anchor="center")
+        self.tv.column("tick", width=40, minwidth=40, stretch=False, anchor="center")
         self.tv.bind("<Button-1>", self._tick_click, add="+")
-        for k, h, w in (("no", "S#", 40), ("desc", "Description", 160), ("n", "Imgs", 45), ("mm", "mm", 42), ("kvp", "kVp", 42), ("dec", "Decision", 80), ("why", "Why", 200)):
+        for k, h, w in (("no", "S#", 44), ("desc", "Description", 180), ("n", "Imgs", 52), ("dec", "Decision", 96)):
             self.tv.heading(k, text=h)
-            self.tv.column(k, width=w, minwidth=30, stretch=k in ("desc", "why"))
+            self.tv.column(k, width=w, minwidth=36, stretch=(k == "desc"))
         ttk.Style(self).configure("Viewer.Treeview", rowheight=68)
         self.tv.configure(style="Viewer.Treeview")
         ys = ttk.Scrollbar(tvf, orient="vertical", command=self.tv.yview)
@@ -146,6 +146,8 @@ class ViewerWindow(tk.Toplevel):
         self.tv.pack(side="left", fill="both", expand=True)
         ys.pack(side="left", fill="y")
         self.tv.bind("<<TreeviewSelect>>", lambda _e: self._select_series())
+        self.lbl_detail = ttk.Label(left, text="", wraplength=340, justify="left", style="Muted.TLabel")
+        self.lbl_detail.pack(anchor="w", pady=(6, 0))
         lb = ttk.Frame(left)
         lb.pack(fill="x", pady=(6, 0))
         self.b_use_ticked = ttk.Button(lb, text="Anonymise only the ticked series", style=theme.style_or("Accent.TButton"), command=self._use_ticked)
@@ -401,7 +403,7 @@ class ViewerWindow(tk.Toplevel):
             if saved is not None:
                 dec, tag = ("ticked", "keep") if s.uid in saved else ("not ticked", "drop")
             mark = "" if not self.source_mode else ("\u2611" if s.uid in self.ticked else "\u2610")
-            self.tv.insert("", "end", iid=str(i), text="", values=(mark, s.number, s.description, s.n_images, f"{s.thickness:g}" if s.thickness else "", s.kvp, dec, s.reason), tags=(tag,))
+            self.tv.insert("", "end", iid=str(i), text="", values=(mark, s.number, s.description, s.n_images, dec), tags=(tag,))
         self._ticks_label()
         n = sum(s.n_images for s in series)
         self.v_status.set(f"{len(series)} series, {n} images. Study ID: {self._study_id()}")
@@ -448,8 +450,9 @@ class ViewerWindow(tk.Toplevel):
         path = pv.write_selection(self._selection_path(), self._study_id(), chosen)
         self.app.v_series_select.set(str(path))
         self.ticks_saved = True
-        self._show_series(self.series)
-        self.v_status.set(f"Saved: {len(chosen)} series for {self._study_id()} in {path.name}. The run will keep only these.")
+        sid = self._study_id()
+        self._close()
+        self.app.ticks_saved(len(chosen), sid)
 
     def _clear_ticks(self) -> None:
         path = self._selection_path()
@@ -480,6 +483,9 @@ class ViewerWindow(tk.Toplevel):
             return                      # Tk can deliver the same selection twice; do not reload or stop cine
         self._stop_play()
         self.cur = self.series[int(sel[0])]
+        s = self.cur
+        facts = [f"{s.thickness:g} mm" if s.thickness else "", f"{s.kvp} kV" if s.kvp else "", s.kernel, f"FOV {s.fov:.0f}" if s.fov else "", s.modality]
+        self.lbl_detail.configure(text=f"S{s.number}  {s.description}\n" + "  ·  ".join(x for x in facts if x) + f"\n{s.reason}")
         self.idx, self.boxes, self.wl, self.vol, self.vol_for = 0, [], None, None, None
         self.zoom, self.pan = 1.0, [0.0, 0.0]
         self.v_orient.set("Axial")

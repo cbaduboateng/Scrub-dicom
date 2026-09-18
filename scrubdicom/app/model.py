@@ -119,8 +119,8 @@ class JobSpec:
                 p.append(f"Input folder not found: {self.input}")
             if self.mode == "single" and not self.study_id.strip():
                 p.append("Give the study ID to apply to this folder.")
-            if self.mode == "single" and self.study_id.strip() and not re.fullmatch(r"[A-Za-z0-9._-]+", self.study_id.strip()):
-                p.append("Study ID may only contain letters, digits, '.', '_' and '-'.")
+            if self.mode == "single" and self.study_id.strip() and not re.fullmatch(r"[A-Za-z0-9._ -]+", self.study_id.strip()):
+                p.append("Study ID may only contain letters, digits, spaces, '.', '_' and '-'.")
             if self.mode == "mapping":
                 if not self.mapping.strip():
                     p.append("Choose the mapping file (CSV or XLSX).")

@@ -400,7 +400,7 @@ class App(tk.Tk):
         self.lbl_mode.grid(row=2, column=0, columnspan=4, sticky="w", pady=(0, 6))
         self.rows_manifest = self._row(s1, 3, "Patient list", self.v_manifest, "file", "A CSV with two columns: source_folder (the folder holding that patient's scans) and study_id (the new ID). One patient per row.", csv_t)
         self.rows_input = self._row(s1, 4, "Scans folder", self.v_input, "dir", "All sub-folders are searched.")
-        self.rows_study_id = self._row(s1, 5, "New ID", self.v_study_id, None, "Applied to every file in the folder. Letters, digits, - _ . only.", width=24)
+        self.rows_study_id = self._row(s1, 5, "New ID", self.v_study_id, None, "Applied to every file in the folder. Letters, digits, spaces, - _ . (spaces become _ in folder names).", width=24)
         self.rows_mapping = self._row(s1, 6, "ID spreadsheet", self.v_mapping, "file", "CSV or Excel with an old-ID column and a new-ID column. Column names are auto-detected; see the columns row if not.",
                                       [("Spreadsheets", "*.csv *.xlsx *.xlsm"), ("All files", "*")])
         adv = ttk.Frame(s1)
@@ -1247,6 +1247,17 @@ class App(tk.Tk):
 
     def _edit_profiles(self) -> None:
         ProfileEditor(self, self.v_profile.get())
+
+    def ticks_saved(self, n: int, study_id: str) -> None:
+        """Called by the viewer after 'Anonymise only the ticked series': looking at the series in the viewer is the
+        preview, so land on the Anonymise step with the button enabled."""
+        self.previewed_key = self._spec_key()
+        self._goto_step(2)
+        self._live_validate()
+        self.v_ready.set(f"{n} ticked series saved for {study_id}. Press Anonymise.")
+        self.lbl_ready.configure(style="Ok.TLabel")
+        self.lift()
+        self.b_start.focus_set()
 
     def _viewer(self, mode: str, study_id: str | None = None) -> None:
         w = open_viewer(self, mode, study_id)

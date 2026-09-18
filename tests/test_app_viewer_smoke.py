@@ -129,13 +129,14 @@ def test_viewer_source_mode_end_to_end(app, data):
     w._toggle_tick(row)
     assert len(w.ticked) == 0 and w.tv.set(row, "tick") == "\u2610"
     w._toggle_tick(row)
-    w._use_ticked()
+    w._clear_ticks()                       # nothing saved yet: a no-op that keeps the window
+    assert w.winfo_exists()
+    w._toggle_tick(row)
+    w._use_ticked()                        # saves, closes the viewer, and counts as the preview
     sel_path = Path(conf) / "series_selection.csv"
     assert sel_path.exists() and "CBB0701" in sel_path.read_text() and app.v_series_select.get() == str(sel_path)
-    assert "only the ticked series" in app._summary_text([]) or True
-    w._clear_ticks()
-    assert app.v_series_select.get() == "" and not sel_path.exists()
-    w.destroy()
+    assert not w.winfo_exists() and app.previewed_key == app._spec_key() and app.step == 2
+    assert "only the ticked series for 1 patient" in app._summary_text([])
 
 
 def test_viewer_output_mode_quarantine(app, data, monkeypatch):

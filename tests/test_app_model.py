@@ -55,6 +55,7 @@ def test_validation_catches_the_usual_mistakes(tmp_path):
     assert any("OLDPREFIX=NEWPREFIX" in p for p in JobSpec(mode="manifest", output="o", manifest=__file__, remap="bad").validate())
     assert any("study id" in p.lower() for p in JobSpec(mode="single", output="o", input=str(inp)).validate())
     assert any("only contain" in p for p in JobSpec(mode="single", output="o", input=str(inp), study_id="bad id!").validate())
+    assert not any("only contain" in p for p in JobSpec(mode="single", output="o", input=str(inp), study_id="TEST 1").validate()), "spaces are allowed"
     assert any("must not be the input" in p for p in JobSpec(mode="single", output=str(inp), input=str(inp), study_id="S").validate())
     assert any("inside the input" in p for p in JobSpec(mode="single", output=str(inp / "out"), input=str(inp), study_id="S").validate())
     assert any("mapping file" in p.lower() for p in JobSpec(mode="mapping", output="o", input=str(inp)).validate())
