@@ -768,11 +768,15 @@ class ViewerWindow(tk.Toplevel):
             return
         files = list(self.cur.files) if all_files else [self._current_path()]
         what = f"{len(files)} file(s) of series S{self.cur.number}" if all_files else self._current_path().name
-        msg = (f"Paint {len(self.boxes)} box(es) black in {what} and move it out of quarantine into the study folder?\n\n"
-               "The original scan is not touched. Run the output check again afterwards.") if self.boxes else \
-              (f"No boxes drawn. Release {what} from quarantine unchanged? Only do this if you have looked at it and it carries no burned-in text.")
-        if not messagebox.askyesno("Release from quarantine", msg, parent=self, icon="warning", default="no"):
-            return
+        if self.boxes:
+            msg = (f"Paint {len(self.boxes)} box(es) black in {what} and move it out of quarantine into the study folder?\n\n"
+                   "The original scan is not touched. Run the output check again afterwards.")
+            if not messagebox.askyesno("Release from quarantine", msg, parent=self, icon="warning", default="no"):
+                return
+        else:
+            from .ui import confirm_typed
+            if not confirm_typed(self, "Release without redaction", f"No boxes drawn. {what} will leave quarantine unchanged. Only do this if you have looked at it and it carries no burned-in text."):
+                return
         sid, done, errors = self._study_id(), 0, []
         for f in files:
             try:

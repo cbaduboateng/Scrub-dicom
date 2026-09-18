@@ -27,7 +27,7 @@ def data(tmp_path_factory):
 def app(data, tmp_path):
     try:
         from scrubdicom.app.ui import App
-        a = App()
+        a = App(offer_demo=False)
     except tk.TclError as e:
         pytest.skip(f"no display: {e}")
     a.settings = Settings.load(tmp_path / "settings.json")

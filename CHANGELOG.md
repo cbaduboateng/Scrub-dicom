@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.5.0 (2026-09-18)
+Idiot-proofing pass, as prepared for a conference demo.
+- Guided three-step flow on the Anonymise tab (Where are the scans? / Where should the copies go? / Review and go)
+  with Next disabled until each step is complete and a plain-English summary before the buttons.
+- Guard rails: Anonymise is disabled until Preview has run with the same settings; hand-over is disabled until the
+  check has passed and no linkage file is inside the output; destructive actions (clear thick studies, release from
+  quarantine without redaction) require typing YES; an orange banner whenever the profile retains anything.
+- One status strip under the header on every tab: Not started / Anonymising n of N / Verified, safe to hand over /
+  Check failed, do not share.
+- Empty tabs say what to do next with one button; failures show a recovery card with one action (Resume after a
+  drive loss, Open report after a failed check, Go to step 1 for missing folders).
+- Built-in demo: "Try it on two sample patients" runs the whole flow on synthetic scans; offered on first launch.
+  The frozen self-test runs the demo end to end, so a build that cannot complete the flow does not ship.
+- Rarely used ways and options (ID spreadsheet mode, drive path fix, already-analysed series, technical details)
+  sit behind "More ways and options".
+- Home tab: Start, Try the demo, Viewer, and "where you left off".
+
 ## 0.4.0 (2026-09-18)
 De-identification profiles and a refreshed interface.
 - Profiles (`scrubdicom/profiles.py`): a named set of PS3.15-sanctioned options a user may retain (sex, 5-year age

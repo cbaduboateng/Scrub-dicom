@@ -546,6 +546,6 @@ def manifest_patients(manifest: str, remap: str | None = None) -> list[tuple[str
     from scrubdicom.core import load_manifest, find_folder
     try:
         return [(sid, find_folder(folder)) for folder, sid in load_manifest(manifest, remap or None)]
-    except SystemExit:
+    except (SystemExit, OSError, KeyError):
         return []
 

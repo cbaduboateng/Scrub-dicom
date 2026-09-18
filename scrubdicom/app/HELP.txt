@@ -11,12 +11,23 @@ What it does
 The four tabs are the four steps, in order: Anonymise, Check series, Verify output, Share safely.
 The Dark / Light button in the header switches the look; it follows the system setting at first launch.
 
-TAB 1  ANONYMISE
-  Three cards: 1 Scans, 2 Output, 3 Options, then Preview / Anonymise. Hover a "?" for the details of any
-  field. Rarely needed fields (drive path fix, already-analysed series, spreadsheet columns, scanner technical
-  details, flat folders, automatic check) are behind the "Advanced" toggle at the right of the buttons.
+HOME
+  Three buttons: Start (the guided flow), Try it on two sample patients, Viewer. "Where you left off" shows the
+  last output folder, how many patients are done and whether the check passed.
 
-  1 Scans: where they are, and what each patient will be called. Three ways:
+THE STATUS STRIP
+  The coloured strip under the header is the one thing to watch: Not started; Anonymising n of N; Anonymised, not
+  yet safe to hand over; Verified, safe to hand over; or Check failed, do not share. An orange line below it means
+  the chosen profile retains something (sex, shifted dates...) and the output is not fully blinded.
+
+FIRST TIME?  Help > "Try it on two sample patients" runs the whole flow on built-in synthetic scans in about twenty
+  seconds. Nothing real is involved.
+
+TAB 1  ANONYMISE
+  Three steps, one screen each; Next is available when the step is complete. Hover any "?" for the detail of a
+  field. Rarely needed ways and options are behind "More ways and options" on step 1.
+
+  Step 1: where the scans are, and what each patient will be called. Three ways:
     A list of patients (CSV)       Best for a cohort. A CSV with two columns: source_folder (the folder holding
                                    that patient's scans, anywhere on any drive) and study_id (the new ID).
                                    Can be stopped and resumed. Can keep only the coronary series.
@@ -35,7 +46,8 @@ TAB 1  ANONYMISE
   Step 2: where the anonymised copies go. Use a different drive from the scans, or at least a folder outside
   them. It will contain one folder per patient (named by new ID), plus _logs and _review.
 
-  Step 3: options.
+  Step 3: review and go. The profile, the switches, a plain-English summary of what is about to happen, and the buttons.
+  Options:
     Keep only the coronary CT angiogram series   drops scouts, calcium score, chest recons, lung/sharp kernels,
                                                  MPRs and dose reports. Every decision is shown on tab 2.
     Skip patients already done (resume)          leave on. Half-finished patients are redone.
@@ -54,14 +66,16 @@ TAB 1  ANONYMISE
                               output against it.
 
   Buttons
-    Preview        scans and reports what would be written; writes nothing. Do this first with a new list.
+    Preview        scans and reports what would be written; writes nothing. Anonymise stays disabled until Preview
+                   has run with the same settings, so a wrong folder is caught before anything is written.
     Anonymise      shows the exact command, then runs it. The bar shows patient n of N and the time left; the
                    activity log updates live.
     Stop           ends the run cleanly. The patient in progress is redone next time.
     Open viewer    the built-in DICOM viewer (see below).
     More           show the command line (so a colleague can reproduce the run), open the output folder or the
                    log file, copy the log, show skipped patients in the log.
-    Advanced       reveals the rarely needed fields and options.
+    If something goes wrong a card appears with one button: Resume after a drive disconnects, Open report after a
+    failed check, Go to step 1 when folders in the list were not found.
 
 THE VIEWER  (button "Preview a patient in the viewer..." on tab 1; "Open patient in viewer" on tab 2;
              "Review and redact quarantined files" on tab 4)
@@ -93,6 +107,8 @@ TAB 3  VERIFY OUTPUT
   words you type are forgotten when you close the app. Do not share output that has not passed.
 
 TAB 4  SHARE SAFELY
+  "Hand over" is disabled until the check has passed and no linking file is inside the output folder; the reasons
+  are listed. Fix them with "Check now" and "Move confidential logs out".
   The whole _logs folder is confidential, not just the LINKAGE file: the per-file and per-patient CSVs and
   the run logs record the original folder paths, and folders are usually named by hospital number.
   "Move the patient-linking logs out" moves everything except uid_salt.txt (needed so a re-run produces the

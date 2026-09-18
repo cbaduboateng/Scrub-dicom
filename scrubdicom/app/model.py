@@ -500,12 +500,12 @@ def move_logs_out(out: Path, dest_parent: Path) -> tuple[list[Path], Path]:
 SETTINGS_KEYS = {
     # paths the user chose, and booleans. Nothing that identifies a patient is ever written here.
     "mode", "output", "manifest", "remap", "input", "mapping", "current_col", "new_col", "sheet", "match_on",
-    "series_pick", "ctca_only", "resume", "keep_technical", "flat", "verify_after_run", "show_all_lines", "geometry", "profile", "theme", "external_viewer",
+    "series_pick", "ctca_only", "resume", "keep_technical", "flat", "verify_after_run", "show_all_lines", "geometry", "profile", "theme", "external_viewer", "first_run_done",
 }
 _DEFAULTS = {
     "mode": "manifest", "output": "", "manifest": "", "remap": "", "input": "", "mapping": "", "current_col": "",
     "new_col": "", "sheet": "", "match_on": "patientid", "series_pick": "", "ctca_only": True, "resume": True,
-    "keep_technical": False, "flat": False, "verify_after_run": True, "show_all_lines": False, "geometry": "", "profile": "", "theme": "", "external_viewer": "",
+    "keep_technical": False, "flat": False, "verify_after_run": True, "show_all_lines": False, "geometry": "", "profile": "", "theme": "", "external_viewer": "", "first_run_done": False,
 }
 
 

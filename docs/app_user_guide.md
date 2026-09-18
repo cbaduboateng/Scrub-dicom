@@ -24,6 +24,25 @@ For the person running the anonymisation. No Python, no terminal. If you are the
 The app makes no changes to your system and never connects to the internet. To uninstall, delete
 the app (macOS) or use Add/Remove Programs (Windows).
 
+## Home
+
+The first tab. Three buttons: **Start** (the guided flow), **Try it on two sample patients**, and
+**Viewer**. "Where you left off" shows the last output folder, how many patients are done and whether
+the check passed, with **Continue**, **Share safely** and **Open output folder**.
+
+## The status strip
+
+The coloured strip under the header is the one thing to watch, on every tab: **Not started**,
+**Anonymising n of N**, **Anonymised, not yet safe to hand over**, **Verified, safe to hand over**, or
+**Check failed, do not share**. An orange line below it means the chosen profile retains something and
+the output is not fully blinded.
+
+## First time? Try the demo
+
+Help > **Try it on two sample patients** (also offered on first launch) runs the whole flow on built-in
+synthetic scans in about twenty seconds: preview, anonymise, check. Nothing real is involved and
+nothing outside the app's own folder is written.
+
 ## The four steps
 
 The tabs are numbered in the order you use them. The **Dark / Light** button in the header switches the
@@ -32,10 +51,10 @@ tells you what is still missing, and Anonymise becomes available when the form i
 
 ### 1  Anonymise
 
-Three cards, then the buttons. Hover any **?** for the detail of a field. Rarely needed fields and
-options sit behind the **Advanced** toggle at the right of the buttons.
+Three steps, one screen each, with **Next** available once the step is complete. Hover any **?** for the
+detail of a field. Rarely needed ways and options sit behind **More ways and options** on step 1.
 
-**Card 1, Scans: where they are, and what each patient will be called.**
+**Step 1: where the scans are, and what each patient will be called.**
 
 | Choose | When |
 |---|---|
@@ -43,11 +62,12 @@ options sit behind the **Advanced** toggle at the right of the buttons.
 | **One patient** | A single case. Type the new ID. |
 | **A folder of patients + an ID spreadsheet** | One folder with a sub-folder per patient and a CSV or Excel sheet with an old-ID column and a new-ID column. Say whether the old ID is the Patient ID inside the scans or the sub-folder name. |
 
-**Card 2, Output: where the anonymised copies go.** A different drive from the scans, or at least a
+**Step 2: where the anonymised copies go.** A different drive from the scans, or at least a
 folder outside them. It will contain one folder per patient, named by new ID, plus `_logs` and
 `_review`.
 
-**Card 3, Options.**
+**Step 3: review and go.** The profile, the switches, a plain-English summary of what is about to happen,
+and the buttons.
 
 - **Keep only the coronary CT angiogram series** (on by default): drops scouts, calcium score runs,
   chest recons, lung/sharp kernels, MPRs and dose reports. Every decision is shown on tab 2.
@@ -77,15 +97,17 @@ the chosen profile.
 
 Buttons:
 
-- **Preview**: scans and reports what would be written; writes nothing. Do this first with a new list.
+- **Preview**: scans and reports what would be written; writes nothing. **Anonymise stays disabled until
+  Preview has run with the same settings**, so a wrong folder is caught before anything is written.
 - **Anonymise**: shows you the exact command it is about to run, then runs it. The bar shows
   "Patient n of N" with an estimate of time left; the activity log updates live.
 - **Stop**: ends the run cleanly. The patient in progress is redone next time.
 - **Open viewer**: the built-in DICOM viewer.
 - **More**: show the command line so a colleague can reproduce the run, open the output folder or the
   log file, copy the log.
-- **Advanced**: reveals the drive path fix, already-analysed series, spreadsheet columns, scanner
-  technical details, flat folders and the automatic check.
+- If something goes wrong, a card appears with one button: **Resume** after a drive disconnects, **Open
+  report** after a failed check, **Go to step 1** when folders in the list were not found. Removing thick
+  studies or releasing a file from quarantine without redaction asks you to type YES.
 
 The computer is kept awake for the length of the run. Leave a laptop open and plugged in.
 
@@ -135,8 +157,9 @@ The `_logs` folder is confidential, not just the LINKAGE file. The per-file and 
 the run logs all record the original folder paths, and folders are usually named by hospital
 number.
 
-- **Is the output folder safe to hand over?** lists what still stands between the output folder and
-  a reader: check status, half-finished patients, quarantined files in `_review`, linking or other
+- **Hand over** is disabled until the check has passed and no linking file is inside the output folder;
+  the reasons are listed. **Is the output folder safe to hand over?** lists what still stands between the
+  output folder and a reader: check status, half-finished patients, quarantined files in `_review`, linking or other
   confidential logs still inside the tree.
 - **Move the patient-linking logs out** moves everything except `uid_salt.txt` (needed so a re-run
   produces the same UIDs) and passed check reports to a folder you choose outside the output tree.
