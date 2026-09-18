@@ -94,7 +94,7 @@ if sys.platform == "darwin":
             "CFBundleShortVersionString": VERSION,
             "CFBundleVersion": VERSION,
             "NSHighResolutionCapable": True,
-            "NSHumanReadableCopyright": "Built by Charles Badu-Boateng. Copyright BB & Co Holdings Ltd. PolyForm Noncommercial 1.0.0.",
+            "NSHumanReadableCopyright": "Built by Dr Charles Badu-Boateng. Copyright BB & Co Holdings Ltd. PolyForm Noncommercial 1.0.0.",
             "LSMinimumSystemVersion": "11.0",
             "LSApplicationCategoryType": "public.app-category.medical",
             "NSRequiresAquaSystemAppearance": False,

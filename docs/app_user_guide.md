@@ -32,7 +32,10 @@ tells you what is still missing, and Anonymise becomes available when the form i
 
 ### 1  Anonymise
 
-**Step 1: where the scans are, and what each patient will be called.**
+Three cards, then the buttons. Hover any **?** for the detail of a field. Rarely needed fields and
+options sit behind the **Advanced** toggle at the right of the buttons.
+
+**Card 1, Scans: where they are, and what each patient will be called.**
 
 | Choose | When |
 |---|---|
@@ -40,11 +43,11 @@ tells you what is still missing, and Anonymise becomes available when the form i
 | **One patient** | A single case. Type the new ID. |
 | **A folder of patients + an ID spreadsheet** | One folder with a sub-folder per patient and a CSV or Excel sheet with an old-ID column and a new-ID column. Say whether the old ID is the Patient ID inside the scans or the sub-folder name. |
 
-**Step 2: where the anonymised copies go.** A different drive from the scans, or at least a
+**Card 2, Output: where the anonymised copies go.** A different drive from the scans, or at least a
 folder outside them. It will contain one folder per patient, named by new ID, plus `_logs` and
 `_review`.
 
-**Step 3: options.**
+**Card 3, Options.**
 
 - **Keep only the coronary CT angiogram series** (on by default): drops scouts, calcium score runs,
   chest recons, lung/sharp kernels, MPRs and dose reports. Every decision is shown on tab 2.
@@ -52,7 +55,8 @@ folder outside them. It will contain one folder per patient, named by new ID, pl
 - **Keep scanner technical details**: kernel and scan options. Leave off for a blinded read, because
   a kernel name identifies the scanner make.
 - **One folder per patient, no series sub-folders**.
-- **Check the output automatically when done**: leave on.
+- **Check output when done** (under Advanced, on by default): runs the verify step after the run. It
+  reads headers only, so it is safe on any cohort size; allow a few minutes per 100 patients.
 
 **De-identification profile.** "Blinded read" (the default) removes everything identifying and is the
 policy validated on the 520-study cohort. Other profiles keep a little more when a study needs it:
@@ -73,12 +77,15 @@ the chosen profile.
 
 Buttons:
 
-- **Preview (writes nothing)**: scans and reports what would be written. Do this first with a new
-  list.
+- **Preview**: scans and reports what would be written; writes nothing. Do this first with a new list.
 - **Anonymise**: shows you the exact command it is about to run, then runs it. The bar shows
-  "Patient n of N" with an estimate of time left; the log updates live.
+  "Patient n of N" with an estimate of time left; the activity log updates live.
 - **Stop**: ends the run cleanly. The patient in progress is redone next time.
-- **Show the command this will run**: so a colleague can reproduce the run from a terminal.
+- **Open viewer**: the built-in DICOM viewer.
+- **More**: show the command line so a colleague can reproduce the run, open the output folder or the
+  log file, copy the log.
+- **Advanced**: reveals the drive path fix, already-analysed series, spreadsheet columns, scanner
+  technical details, flat folders and the automatic check.
 
 The computer is kept awake for the length of the run. Leave a laptop open and plugged in.
 
@@ -102,8 +109,9 @@ cmd/ctrl + wheel and 1:1 / Fit all zoom; double-click fits; right-drag always pa
 kVp, mAs and CTDIvol appear in the series list and in the bottom-right annotation. Presets for coronary, soft tissue, lung and bone windows.
 Axial, coronal and sagittal reformats are cut from the series once it has been loaded into memory
 (a 300-slice coronary study takes a few seconds and about 300 MB). The Hounsfield value under the
-cursor is shown top right. **Open this file in your DICOM viewer** hands the current file to
-whatever viewer is installed on the computer (Bee, Horos, Weasis, MicroDicom).
+cursor is shown top right. **Open in viewer app** hands the current file, or the series' folder, to a
+viewer application of your choice: pick it once with "Choose viewer application..." (Bee, Horos,
+Weasis, MicroDicom); the choice is remembered.
 
 ### 2  Check series
 

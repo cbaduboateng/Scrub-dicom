@@ -500,12 +500,12 @@ def move_logs_out(out: Path, dest_parent: Path) -> tuple[list[Path], Path]:
 SETTINGS_KEYS = {
     # paths the user chose, and booleans. Nothing that identifies a patient is ever written here.
     "mode", "output", "manifest", "remap", "input", "mapping", "current_col", "new_col", "sheet", "match_on",
-    "series_pick", "ctca_only", "resume", "keep_technical", "flat", "verify_after_run", "show_all_lines", "geometry", "profile", "theme",
+    "series_pick", "ctca_only", "resume", "keep_technical", "flat", "verify_after_run", "show_all_lines", "geometry", "profile", "theme", "external_viewer",
 }
 _DEFAULTS = {
     "mode": "manifest", "output": "", "manifest": "", "remap": "", "input": "", "mapping": "", "current_col": "",
     "new_col": "", "sheet": "", "match_on": "patientid", "series_pick": "", "ctca_only": True, "resume": True,
-    "keep_technical": False, "flat": False, "verify_after_run": True, "show_all_lines": False, "geometry": "", "profile": "", "theme": "",
+    "keep_technical": False, "flat": False, "verify_after_run": True, "show_all_lines": False, "geometry": "", "profile": "", "theme": "", "external_viewer": "",
 }
 
 
@@ -629,10 +629,27 @@ def profile_for_path(path: str) -> Profile:
         return Profile()
 
 
+def external_viewer_command(target: Path, app_path: str = "") -> list[str] | None:
+    """How to open `target` (a file or a folder) in the user's chosen viewer application, or in the system default
+    when app_path is empty. Returns None where os.startfile must be used instead (Windows default handler)."""
+    target = str(target)
+    app_path = (app_path or "").strip()
+    if sys.platform == "darwin":
+        return ["open", "-a", app_path, target] if app_path else ["open", target]
+    if os.name == "nt":
+        return [app_path, target] if app_path else None
+    return [app_path, target] if app_path else ["xdg-open", target]
+
+
+def viewer_app_name(app_path: str) -> str:
+    p = Path(app_path.strip()) if app_path.strip() else None
+    return (p.stem if p else "system default viewer")
+
+
 def about_text() -> str:
     return (f"{APP_NAME} {APP_VERSION}\n"
             f"Engine: scrubdicom.core {ENGINE_VERSION}   ·   Python {sys.version.split()[0]}   ·   "
             f"{'packaged app' if is_frozen() else 'running from source'}\n"
             f"Coronary series rule: slices <= {MAX_SLICE_MM:g} mm\n\n"
-            "Built by Charles Badu-Boateng. Copyright BB & Co Holdings Ltd. PolyForm Noncommercial 1.0.0.\n"
+            "Built by Dr Charles Badu-Boateng. Copyright BB & Co Holdings Ltd. PolyForm Noncommercial 1.0.0.\n"
             "This app never connects to the internet and never modifies the original scans.")

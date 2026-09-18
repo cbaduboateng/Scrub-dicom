@@ -215,3 +215,12 @@ def test_spec_to_settings_skips_study_id(tmp_path):
     s = Settings.load(tmp_path / "s.json")
     model.spec_to_settings(JobSpec(mode="single", output="/o", input="/i", study_id="X"), s)
     assert s.get("output") == "/o" and "study_id" not in s.values
+
+
+def test_external_viewer_command(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert model.external_viewer_command(Path("/x/f.dcm"), "/Applications/Bee DICOM Viewer.app") == ["open", "-a", "/Applications/Bee DICOM Viewer.app", "/x/f.dcm"]
+    assert model.external_viewer_command(Path("/x"), "") == ["open", "/x"]
+    assert model.viewer_app_name("/Applications/Bee DICOM Viewer.app") == "Bee DICOM Viewer"
+    assert model.viewer_app_name("") == "system default viewer"
+    assert "external_viewer" in model.SETTINGS_KEYS

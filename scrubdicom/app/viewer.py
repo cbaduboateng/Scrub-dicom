@@ -97,7 +97,16 @@ class ViewerWindow(tk.Toplevel):
         self.cb_patient = ttk.Combobox(top, textvariable=self.v_patient, state="readonly", width=20)
         self.cb_patient.pack(side="left")
         self.cb_patient.bind("<<ComboboxSelected>>", lambda _e: self._load_series())
-        ttk.Button(top, text="Open this file in your DICOM viewer", command=self._open_external).pack(side="right")
+        self.mb_ext = ttk.Menubutton(top, text="Open in viewer app")
+        em = tk.Menu(self.mb_ext, tearoff=False)
+        em.add_command(label="This file", command=lambda: self._open_external("file"))
+        em.add_command(label="This series' folder", command=lambda: self._open_external("folder"))
+        em.add_separator()
+        em.add_command(label="Choose viewer application...", command=self._choose_viewer_app)
+        em.add_command(label="Use the system default", command=lambda: self._set_viewer_app(""))
+        self.mb_ext["menu"] = em
+        self.mb_ext.pack(side="right")
+        self._sync_viewer_app_label()
 
         pane = ttk.PanedWindow(self, orient="horizontal")
         pane.pack(fill="both", expand=True, padx=10)
@@ -826,13 +835,33 @@ class ViewerWindow(tk.Toplevel):
             self._show_series(self.series)
             self.v_status.set("Override removed; the rule decides again.")
 
-    def _open_external(self) -> None:
+    def _open_external(self, what: str = "file") -> None:
         path = self._current_path()
-        if path:
-            from .ui import open_path
-            open_path(path)
-        else:
+        if not path:
             messagebox.showinfo("Nothing selected", "Select a series first.", parent=self)
+            return
+        from .ui import open_with
+        open_with(path.parent if what == "folder" else path, self.app.settings.get("external_viewer") or "")
+
+    def _choose_viewer_app(self) -> None:
+        from tkinter import filedialog
+        if sys.platform == "darwin":
+            p = filedialog.askopenfilename(parent=self, title="Choose a DICOM viewer application", initialdir="/Applications",
+                                           filetypes=[("Applications", "*.app"), ("All files", "*")])
+        else:
+            p = filedialog.askopenfilename(parent=self, title="Choose a DICOM viewer application",
+                                           filetypes=[("Programs", "*.exe"), ("All files", "*")])
+        if p:
+            self._set_viewer_app(p)
+
+    def _set_viewer_app(self, path: str) -> None:
+        self.app.settings.set("external_viewer", path)
+        self.app.settings.save()
+        self._sync_viewer_app_label()
+
+    def _sync_viewer_app_label(self) -> None:
+        name = model.viewer_app_name(self.app.settings.get("external_viewer") or "")
+        self.mb_ext.configure(text=f"Open in {name}")
 
     def _close(self) -> None:
         self._stop_play()

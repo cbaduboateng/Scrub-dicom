@@ -150,6 +150,6 @@ policy profiles, signed and notarised releases.
 
 ## Credits and licence
 
-Built by Charles Badu-Boateng. Copyright BB & Co Holdings Ltd. PolyForm Noncommercial 1.0.0: free for research, education and personal use;
+Built by Dr Charles Badu-Boateng. Copyright BB & Co Holdings Ltd. PolyForm Noncommercial 1.0.0: free for research, education and personal use;
 commercial use requires a licence from BB & Co Holdings Ltd (charles@bbandcoconsulting.com). See [LICENSE](LICENSE). Scrub-DICOM is a tool, not a legal opinion: you remain
 responsible for confirming that your output meets your institution's and regulator's requirements.

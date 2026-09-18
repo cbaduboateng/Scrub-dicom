@@ -1,8 +1,8 @@
 # Scrub-DICOM: working notes for Claude Code
 
 ## What this is
-Batch pseudonymisation of cardiac CT (CTCA) DICOM for blinded research reads. Built by and credited to Charles Badu-Boateng; copyright and licence holder BB & Co Holdings Ltd,
-PolyForm Noncommercial. Maintainer: Charles Badu-Boateng (cardiology registrar, SCAD PhD). The v0.1 engine
+Batch pseudonymisation of cardiac CT (CTCA) DICOM for blinded research reads. Built by and credited to Dr Charles Badu-Boateng; copyright and licence holder BB & Co Holdings Ltd,
+PolyForm Noncommercial. Maintainer: Dr Charles Badu-Boateng (cardiology registrar, SCAD PhD). The v0.1 engine
 in `scrubdicom/core.py` has been validated on ~520 real studies (Siemens, GE, Canon, Philips exports) and is the
 thing not to break. Read `README.md`, `CHANGELOG.md` and `docs/tag_policy.md` before changing behaviour.
 

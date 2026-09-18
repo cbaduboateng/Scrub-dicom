@@ -96,3 +96,9 @@ def tag_colours(tree: ttk.Treeview | tk.Text, keys: tuple[str, ...]) -> None:
     for k in keys:
         if k in pal:
             tree.tag_configure(k, foreground=pal[k])
+
+
+def style_or(name: str, fallback: str = "") -> str:
+    """A Sun Valley-only style name (Accent.TButton, Toggle.TButton, Switch.TCheckbutton) when the theme is active,
+    else the default style, so the app still runs without sv_ttk."""
+    return name if sv_ttk is not None else fallback

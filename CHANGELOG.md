@@ -13,7 +13,9 @@ De-identification profiles and a refreshed interface.
   viewer's header before/after follows the chosen profile.
 - Interface: Sun Valley theme (light/dark, follows the system, toggle in the header), header bar, live validation
   that says what is missing and enables Anonymise only when the form is complete.
-- Tests 51 -> 61.
+- Anonymise tab redesigned: three cards, tooltips instead of inline hints, an Advanced toggle for rarely used
+  fields, accent and switch controls. Viewer: choose the external viewer application; open a file or a folder.
+- Tests 51 -> 62.
 
 ## 0.3.0 (2026-09-18)
 In-app DICOM viewer.

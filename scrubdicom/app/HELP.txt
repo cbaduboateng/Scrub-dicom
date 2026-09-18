@@ -12,8 +12,11 @@ The four tabs are the four steps, in order: Anonymise, Check series, Verify outp
 The Dark / Light button in the header switches the look; it follows the system setting at first launch.
 
 TAB 1  ANONYMISE
+  Three cards: 1 Scans, 2 Output, 3 Options, then Preview / Anonymise. Hover a "?" for the details of any
+  field. Rarely needed fields (drive path fix, already-analysed series, spreadsheet columns, scanner technical
+  details, flat folders, automatic check) are behind the "Advanced" toggle at the right of the buttons.
 
-  Step 1: where the scans are, and what each patient will be called. Three ways:
+  1 Scans: where they are, and what each patient will be called. Three ways:
     A list of patients (CSV)       Best for a cohort. A CSV with two columns: source_folder (the folder holding
                                    that patient's scans, anywhere on any drive) and study_id (the new ID).
                                    Can be stopped and resumed. Can keep only the coronary series.
@@ -51,12 +54,14 @@ TAB 1  ANONYMISE
                               output against it.
 
   Buttons
-    Preview (writes nothing)   scans and reports what would be written. Do this first with a new list.
-    Anonymise                  shows the exact command, then runs it. The bar shows patient n of N and the
-                               time left; the log updates live.
-    Stop                       ends the run cleanly. The patient in progress is redone next time.
-    Show the command...        the command line for the current settings, so a colleague can reproduce the
-                               run from a terminal.
+    Preview        scans and reports what would be written; writes nothing. Do this first with a new list.
+    Anonymise      shows the exact command, then runs it. The bar shows patient n of N and the time left; the
+                   activity log updates live.
+    Stop           ends the run cleanly. The patient in progress is redone next time.
+    Open viewer    the built-in DICOM viewer (see below).
+    More           show the command line (so a colleague can reproduce the run), open the output folder or the
+                   log file, copy the log, show skipped patients in the log.
+    Advanced       reveals the rarely needed fields and options.
 
 THE VIEWER  (button "Preview a patient in the viewer..." on tab 1; "Open patient in viewer" on tab 2;
              "Review and redact quarantined files" on tab 4)
@@ -73,7 +78,8 @@ THE VIEWER  (button "Preview a patient in the viewer..." on tab 1; "Open patient
   right-drag always pans; space = cine. kVp, mAs and CTDIvol are shown in the series list and bottom right. Presets for coronary, soft tissue,
   lung and bone windows. Axial, coronal and sagittal reformats (the series is loaded into memory once). The
   Hounsfield value under the cursor is shown top right. "Open this file in your DICOM viewer" hands the current
-  file to whatever viewer is installed (Bee, Horos, Weasis...).
+  file to a viewer application of your choice: "Open in viewer app" > "Choose viewer application..." once,
+  then "This file" or "This series' folder" (Bee, Horos, Weasis, MicroDicom...).
 
 TAB 2  CHECK SERIES
   One row per series per patient: kept, dropped, or "needs a look" (the engine used a fallback rule because

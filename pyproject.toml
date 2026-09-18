@@ -9,8 +9,8 @@ description = "Batch pseudonymisation of cardiac CT (CTCA) DICOM studies for bli
 readme = "README.md"
 requires-python = ">=3.9"
 license = {file = "LICENSE"}
-authors = [{name = "Charles Badu-Boateng", email = "charles@bbandcoconsulting.com"}]
-maintainers = [{name = "Charles Badu-Boateng"}]
+authors = [{name = "Dr Charles Badu-Boateng", email = "charles@bbandcoconsulting.com"}]
+maintainers = [{name = "Dr Charles Badu-Boateng"}]
 keywords = ["dicom", "anonymisation", "pseudonymisation", "cardiac CT", "CCTA", "reader study", "de-identification"]
 classifiers = [
   "Programming Language :: Python :: 3",
