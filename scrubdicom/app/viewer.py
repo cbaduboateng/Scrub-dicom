@@ -107,10 +107,10 @@ class ViewerWindow(tk.Toplevel):
         ttk.Label(left, text="Series", font=("TkDefaultFont", 12, "bold")).pack(anchor="w")
         tvf = ttk.Frame(left)
         tvf.pack(fill="both", expand=True)
-        self.tv = ttk.Treeview(tvf, columns=("no", "desc", "n", "mm", "dec", "why"), show=("tree", "headings"), height=12, selectmode="browse")
+        self.tv = ttk.Treeview(tvf, columns=("no", "desc", "n", "mm", "kvp", "dec", "why"), show=("tree", "headings"), height=12, selectmode="browse")
         self.tv.column("#0", width=72, minwidth=72, stretch=False)
         self.tv.heading("#0", text="")
-        for k, h, w in (("no", "S#", 40), ("desc", "Description", 170), ("n", "Imgs", 45), ("mm", "mm", 42), ("dec", "Decision", 80), ("why", "Why", 200)):
+        for k, h, w in (("no", "S#", 40), ("desc", "Description", 160), ("n", "Imgs", 45), ("mm", "mm", 42), ("kvp", "kVp", 42), ("dec", "Decision", 80), ("why", "Why", 200)):
             self.tv.heading(k, text=h)
             self.tv.column(k, width=w, minwidth=30, stretch=k in ("desc", "why"))
         ttk.Style(self).configure("Viewer.Treeview", rowheight=68)
@@ -142,6 +142,17 @@ class ViewerWindow(tk.Toplevel):
         ttk.Button(tb, text="1:1", width=4, command=self._one_to_one).pack(side="left", padx=(4, 0))
         ttk.Button(tb, text="+", width=3, command=lambda: self._zoom_step(1)).pack(side="left", padx=(4, 0))
         ttk.Button(tb, text="-", width=3, command=lambda: self._zoom_step(-1)).pack(side="left", padx=(4, 0))
+        ttk.Label(tb, text="Zoom").pack(side="left", padx=(6, 2))
+        self.v_zoom_pct = tk.DoubleVar(value=100.0)
+        self.zoom_scale = ttk.Scale(tb, from_=25, to=800, orient="horizontal", length=130, variable=self.v_zoom_pct, command=lambda _v: self._zoom_from_slider())
+        self.zoom_scale.pack(side="left")
+        self.lbl_zoom = ttk.Label(tb, text="100%", width=5)
+        self.lbl_zoom.pack(side="left")
+        ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=6)
+        ttk.Label(tb, text="Mouse drag:").pack(side="left")
+        self.v_tool = tk.StringVar(value="Window/Level")
+        for tool in ("Window/Level", "Zoom", "Pan"):
+            ttk.Radiobutton(tb, text=tool, value=tool, variable=self.v_tool, command=self._redact_mode).pack(side="left", padx=(4, 0))
         ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=6)
         self.b_play = ttk.Button(tb, text="Play", width=5, command=self._toggle_play)
         self.b_play.pack(side="left")
@@ -192,7 +203,7 @@ class ViewerWindow(tk.Toplevel):
         e2.pack(side="left", padx=(4, 12))
         for e in (e1, e2):
             e.bind("<Return>", lambda _e: self._manual_wl())
-        ttk.Label(row, text="wheel / arrows: slices · drag: window/level · shift-drag or right-drag: pan · cmd/ctrl-wheel: zoom",
+        ttk.Label(row, text="wheel / arrows: slices · cmd/ctrl-wheel or +/-: zoom · double-click: fit · right-drag: pan",
                   foreground="#6e7781").pack(side="left")
         self.lbl_slice = ttk.Label(row, text="")
         self.lbl_slice.pack(side="right")
@@ -348,7 +359,7 @@ class ViewerWindow(tk.Toplevel):
             dec = {"keep": "keep", "maybe": "needs a look", "drop": "drop", "review": "quarantined"}.get(s.verdict, s.verdict)
             if override and override in (s.uid, s.description):
                 dec, tag = "KEEP (override)", "override"
-            self.tv.insert("", "end", iid=str(i), text="", values=(s.number, s.description, s.n_images, f"{s.thickness:g}" if s.thickness else "", dec, s.reason), tags=(tag,))
+            self.tv.insert("", "end", iid=str(i), text="", values=(s.number, s.description, s.n_images, f"{s.thickness:g}" if s.thickness else "", s.kvp, dec, s.reason), tags=(tag,))
         n = sum(s.n_images for s in series)
         self.v_status.set(f"{len(series)} series, {n} images. Study ID: {self._study_id()}")
         first = next((str(i) for i, s in enumerate(series) if s.verdict in ("keep", "review")), "0" if series else None)
@@ -515,7 +526,8 @@ class ViewerWindow(tk.Toplevel):
         tl = f"{self._study_id()}\nS{s.number}  {s.description[:40]}\n{s.modality}  {s.n_images} images"
         tr = f"{self.v_orient.get()}  {self.idx + 1} / {self._n_slices()}\nzoom {self.zoom * 100:.0f}%"
         bl = f"WL {wc:.0f} / WW {ww:.0f}" + ("  inverted" if self.v_invert.get() else "")
-        br = (f"{s.thickness:g} mm" if s.thickness else "") + (f"  {s.kernel}" if s.kernel else "")
+        br = "  ".join(x for x in ((f"{s.kvp} kV" if s.kvp else ""), (f"{s.mas} mAs" if s.mas else ""), (f"CTDIvol {s.ctdi}" if s.ctdi else "")) if x)
+        br += ("\n" if br else "") + (f"{s.thickness:g} mm" if s.thickness else "") + (f"  {s.kernel}" if s.kernel else "")
         if self.v_orient.get() == "Axial" and self.slice is not None:
             ipp = None
             try:
@@ -573,7 +585,25 @@ class ViewerWindow(tk.Toplevel):
         if reset_pan:
             self.pan = [0.0, 0.0]
         self.zoom = z
+        self._sync_zoom_widgets()
         self._render()
+
+    def _sync_zoom_widgets(self) -> None:
+        self._zoom_syncing = True
+        try:
+            self.v_zoom_pct.set(self.zoom * 100)
+            self.lbl_zoom.configure(text=f"{self.zoom * 100:.0f}%")
+        finally:
+            self._zoom_syncing = False
+
+    def _zoom_from_slider(self) -> None:
+        if getattr(self, "_zoom_syncing", False):
+            return
+        z = float(self.v_zoom_pct.get()) / 100.0
+        if abs(z - self.zoom) > 1e-3:
+            self.zoom = max(0.25, min(16.0, z))
+            self.lbl_zoom.configure(text=f"{self.zoom * 100:.0f}%")
+            self._render()
 
     def _zoom_step(self, d: int, at=None) -> None:
         cur = self.zoom
@@ -647,16 +677,24 @@ class ViewerWindow(tk.Toplevel):
 
     def _press(self, e) -> None:
         self.focus_set()
-        self.drag = (e.x, e.y, self.wl)
+        self.drag = (e.x, e.y, self.wl, self.zoom, list(self.pan))
         if self.v_redact.get():
             self._rubber = self.canvas.create_rectangle(e.x, e.y, e.x, e.y, outline="#ff3b30", width=2)
 
     def _motion(self, e) -> None:
         if not self.drag or self.view is None:
             return
-        x0, y0, wl0 = self.drag
+        x0, y0, wl0, z0, p0 = self.drag
+        tool = self.v_tool.get()
         if self.v_redact.get():
             self.canvas.coords(self._rubber, x0, y0, e.x, e.y)
+        elif tool == "Zoom":
+            self.pan = list(p0)
+            self.zoom = z0
+            self._set_zoom(z0 * math.exp((y0 - e.y) / 120.0), at=(x0, y0))
+        elif tool == "Pan":
+            self.pan = [p0[0] + e.x - x0, p0[1] + e.y - y0]
+            self._render()
         else:
             wc, ww = wl0 or (self.slice.default_window if self.slice and self.slice.default_window else (40.0, 400.0))
             self.wl = (wc + (y0 - e.y) * 2.0, max(1.0, ww + (e.x - x0) * 4.0))
@@ -667,7 +705,7 @@ class ViewerWindow(tk.Toplevel):
     def _mouse_release(self, e) -> None:
         if not self.drag:
             return
-        x0, y0, _ = self.drag
+        x0, y0 = self.drag[0], self.drag[1]
         self.drag = None
         if self.v_redact.get() and self.view is not None:
             ax, ay = self._to_image(x0, y0)
@@ -692,7 +730,7 @@ class ViewerWindow(tk.Toplevel):
             w.state(["!disabled"] if quarantined else ["disabled"])
         if not quarantined:
             self.v_redact.set(False)
-        self.canvas.configure(cursor="tcross" if self.v_redact.get() else "fleur")
+        self.canvas.configure(cursor="tcross" if self.v_redact.get() else {"Zoom": "sizing", "Pan": "hand2"}.get(self.v_tool.get(), "fleur"))
         self._render()
 
     def _clear_boxes(self) -> None:

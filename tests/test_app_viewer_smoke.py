@@ -70,8 +70,23 @@ def test_viewer_source_mode_end_to_end(app, data):
     w._step(1)
     assert w.idx == min(n0 + 1, w.cur.n_images - 1)
     w._zoom_step(1)
+    assert w.zoom > 1.0 and w.lbl_zoom.cget("text") == f"{w.zoom * 100:.0f}%"
+    w.v_zoom_pct.set(250)
+    w._zoom_from_slider()
+    assert abs(w.zoom - 2.5) < 1e-6
+    w._set_zoom(1.0, reset_pan=True)
+    assert abs(float(w.v_zoom_pct.get()) - 100) < 1e-6
+    # drag tools: zoom and pan
+    class P: x, y = 300, 300
+    class Q: x, y = 300, 200
+    w.v_tool.set("Zoom"); w._press(P); w._motion(Q); w._mouse_release(Q)
     assert w.zoom > 1.0
     w._set_zoom(1.0, reset_pan=True)
+    w.v_tool.set("Pan"); w._press(P); w._motion(Q); w._mouse_release(Q)
+    assert w.pan == [0.0, -100.0]
+    w._set_zoom(1.0, reset_pan=True)
+    w.v_tool.set("Window/Level")
+    assert any("kV" in str(w.canvas.itemcget(i, "text")) for i in w.canvas.find_all() if w.canvas.type(i) == "text"), "kVp in the annotations"
     w.v_preset.set("Coronary (300 / 800)")
     w._preset()
     assert w.wl == (300.0, 800.0)

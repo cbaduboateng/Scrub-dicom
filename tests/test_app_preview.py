@@ -31,7 +31,7 @@ def test_scan_patient_groups_and_classifies(fixtures):
     series = pv.scan_patient(fixtures / "ORFAN0231")
     assert [s.number for s in series] == ["3", "4", "501"]
     ct = series[0]
-    assert ct.modality == "CT" and ct.n_images == 4 and ct.thickness == 0.75 and ct.kernel == "B26f"
+    assert ct.modality == "CT" and ct.n_images == 4 and ct.thickness == 0.75 and ct.kernel == "B26f" and ct.kvp == "120"
     assert ct.verdict == "drop" and "only 4 images" in ct.reason, "fixture series are below the 100-image rule"
     sr = series[2]
     assert sr.modality == "SR" and sr.review and "SR" in sr.review

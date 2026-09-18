@@ -77,9 +77,10 @@ Open it from tab 1 ("Preview a patient in the viewer..."), tab 2 ("Open patient 
   in the anonymised copy, the file moves into the patient's folder, and the action is logged. Run the
   output check again afterwards; the share checklist reminds you.
 
-Viewing works the way other DICOM viewers do: mouse wheel or arrow keys scroll slices; drag adjusts
-window and level; shift-drag or right-drag pans; cmd/ctrl + wheel, or the + and - buttons, zoom;
-double-click fits; space plays cine. Presets for coronary, soft tissue, lung and bone windows.
+Viewing works the way other DICOM viewers do: mouse wheel or arrow keys scroll slices. The **Mouse
+drag** switch sets what a drag does: window/level, zoom, or pan. The zoom slider, the + and - buttons,
+cmd/ctrl + wheel and 1:1 / Fit all zoom; double-click fits; right-drag always pans; space plays cine.
+kVp, mAs and CTDIvol appear in the series list and in the bottom-right annotation. Presets for coronary, soft tissue, lung and bone windows.
 Axial, coronal and sagittal reformats are cut from the series once it has been loaded into memory
 (a 300-slice coronary study takes a few seconds and about 300 MB). The Hounsfield value under the
 cursor is shown top right. **Open this file in your DICOM viewer** hands the current file to

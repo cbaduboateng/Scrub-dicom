@@ -33,7 +33,8 @@ except ImportError:  # the viewer needs numpy; the rest of the app does not
 
 PREVIEW_SALT = "preview-only-salt"
 HEADER_TAGS = SERIES_TAGS + ["InstanceNumber", "ImagePositionPatient", "Rows", "Columns", "BurnedInAnnotation",
-                             "WindowCenter", "WindowWidth", "StudyInstanceUID", "PatientID", "PatientName"]
+                             "WindowCenter", "WindowWidth", "StudyInstanceUID", "PatientID", "PatientName",
+                             "KVP", "XRayTubeCurrent", "Exposure", "CTDIvol", "PixelSpacing"]
 
 WINDOW_PRESETS: dict[str, tuple[float, float] | None] = {
     "From header": None,
@@ -68,6 +69,9 @@ class Series:
     verdict: str          # keep | maybe | drop
     reason: str
     review: str | None    # quarantine reason, if any
+    kvp: str = ""
+    mas: str = ""
+    ctdi: str = ""
 
     @property
     def n_images(self) -> int:
@@ -76,6 +80,17 @@ class Series:
     @property
     def label(self) -> str:
         return f"S{self.number}: {self.description or '(no description)'}"
+
+
+def _num_str(v) -> str:
+    """'120.0' -> '120', None -> ''. Header numbers arrive as DS strings or floats."""
+    if v is None or v == "":
+        return ""
+    try:
+        f = float(v)
+        return f"{f:g}"
+    except (TypeError, ValueError):
+        return str(v)
 
 
 def _sort_key(ds: Dataset):
@@ -111,7 +126,8 @@ def scan_patient(folder: Path, progress=None) -> list[Series]:
         out.append(Series(uid=uid, number=str(head.get("SeriesNumber", "") or ""), description=str(head.get("SeriesDescription", "") or ""),
                           modality=str(head.get("Modality", "") or ""), thickness=thick, kernel=kern, fov=fov,
                           frames=int(head.get("NumberOfFrames", 0) or 0), files=[p for p, _ in items], header=head,
-                          verdict=verdict, reason=reason, review=is_review_object(head)))
+                          verdict=verdict, reason=reason, review=is_review_object(head),
+                          kvp=_num_str(head.get("KVP")), mas=_num_str(head.get("Exposure") or head.get("XRayTubeCurrent")), ctdi=_num_str(head.get("CTDIvol"))))
     out.sort(key=lambda s: (float(s.number) if s.number.replace(".", "").isdigit() else 1e9, s.description))
     return out
 
