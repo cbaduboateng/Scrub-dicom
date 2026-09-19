@@ -99,10 +99,17 @@ hdiutil create -quiet -volname "Scrub-DICOM $VERSION" -srcfolder "$STAGE" -ov -f
 hdiutil verify -quiet "$DMG" && echo "dmg verified"
 rm -rf "$STAGE"
 
+if [ -n "${SCRUBDICOM_SIGN_IDENTITY:-}" ]; then
+  echo "== sign the disk image"
+  codesign --force --timestamp --sign "$SCRUBDICOM_SIGN_IDENTITY" "$DMG"
+  codesign --verify --verbose=2 "$DMG"
+fi
 if [ -n "${SCRUBDICOM_SIGN_IDENTITY:-}" ] && [ -n "${SCRUBDICOM_NOTARY_PROFILE:-}" ]; then
   echo "== notarise"
   xcrun notarytool submit "$DMG" --keychain-profile "$SCRUBDICOM_NOTARY_PROFILE" --wait
   xcrun stapler staple "$DMG"
+  echo "== Gatekeeper assessment of the disk image"
+  spctl -a -vv -t open --context context:primary-signature "$DMG" 2>&1 | tail -2
 fi
 
 # software bill of materials: what is inside the bundle, with versions and licences
