@@ -30,7 +30,8 @@ VENV=.venv-build
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
 python -m pip install -q --upgrade pip
-# hash-pinned: every wheel must match packaging/requirements-build.lock (regenerate with: pip-compile --generate-hashes packaging/requirements-build.in)
+# hash-pinned: every wheel must match packaging/requirements-build.lock (regenerate with: pip-compile --generate-hashes packaging/requirements-build.in,
+# then re-add the two Windows-only PyInstaller dependencies pefile and pywin32-ctypes with sys_platform markers: pip-compile only sees the platform it runs on)
 if [ -f packaging/requirements-build.lock ]; then
   pip install -q --require-hashes -r packaging/requirements-build.lock
 else

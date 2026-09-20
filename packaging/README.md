@@ -65,7 +65,10 @@ If any step fails the build stops and nothing is shipped.
 
 ## Updating a dependency
 
-Change the pin in `requirements-build.in`, run `pip-compile --generate-hashes --allow-unsafe -o packaging/requirements-build.lock packaging/requirements-build.in`, run the build, then run the frozen app against a real
+Change the pin in `requirements-build.in`, run `pip-compile --generate-hashes --allow-unsafe -o packaging/requirements-build.lock packaging/requirements-build.in`,
+then re-add the two Windows-only PyInstaller dependencies (`pefile`, `pywin32-ctypes`, each with `; sys_platform == "win32"` and the
+hashes of its wheel and sdist from PyPI): pip-compile only records the platform it runs on, and without them the Windows CI job and
+`build_windows.bat` cannot install in `--require-hashes` mode. Run the build, then run the frozen app against a real
 export from each vendor you support and verify it. pydicom releases occasionally change how they
 write file meta or handle deprecated arguments; the engine's `save_as(..., write_like_original=False)`
 call is one such place.
