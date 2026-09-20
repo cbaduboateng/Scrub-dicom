@@ -26,7 +26,7 @@ _cache: dict[tuple[int, str], tk.PhotoImage] = {}
 
 def mark_image(root: tk.Misc, size: int) -> tk.PhotoImage | None:
     """The mark as a PhotoImage at 192, 96, 64, 48, 32 or 24 px (integer subsamples of the 192 px asset)."""
-    key = (size, str(root))
+    key = (size, id(root.tk))          # per Tcl interpreter: a new window after the old one closed gets its own image
     if key in _cache:
         return _cache[key]
     try:
