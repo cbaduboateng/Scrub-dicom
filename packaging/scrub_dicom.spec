@@ -40,7 +40,7 @@ a = Analysis(
     [str(ROOT / "packaging" / "entry.py")],
     pathex=[str(ROOT)],
     binaries=gdcm_binaries + sv_binaries,
-    datas=[(str(ROOT / "scrubdicom" / "app" / "HELP.txt"), "scrubdicom/app")] + gdcm_datas + sv_datas,
+    datas=[(str(ROOT / "scrubdicom" / "app" / "HELP.txt"), "scrubdicom/app"), (str(ROOT / "scrubdicom" / "app" / "assets"), "scrubdicom/app/assets")] + gdcm_datas + sv_datas,
     hiddenimports=["scrubdicom.core", "scrubdicom.app.ui", "scrubdicom.app.model", "scrubdicom.app.runner",
                    "scrubdicom.app.preview", "scrubdicom.app.viewer", "scrubdicom.app.profile_ui", "scrubdicom.app.theme", "scrubdicom.profiles", "openpyxl", "numpy", "gdcm",
                    "pydicom.pixels.decoders.gdcm", "pydicom.pixels.decoders.rle", "sv_ttk"] + gdcm_hidden + sv_hidden,

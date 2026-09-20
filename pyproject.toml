@@ -37,4 +37,4 @@ scrub-dicom-app = "scrubdicom.app:main"
 include = ["scrubdicom*"]
 
 [tool.setuptools.package-data]
-"scrubdicom.app" = ["HELP.txt"]
+"scrubdicom.app" = ["HELP.txt", "assets/*.png"]

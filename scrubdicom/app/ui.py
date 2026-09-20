@@ -27,6 +27,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import model
 from . import theme
+from . import brand
 from .model import APP_NAME, APP_VERSION, JobSpec, Settings
 from .profile_ui import ProfileEditor
 from .runner import EngineProcess
@@ -247,22 +248,23 @@ class App(tk.Tk):
         m.add_cascade(label="Actions", menu=r)
         h = tk.Menu(m, tearoff=False)
         h.add_command(label="User guide", command=lambda: self.nb.select(self.tab_help))
-        h.add_command(label="About", command=lambda: messagebox.showinfo(f"About {APP_NAME}", model.about_text()))
+        h.add_command(label="About", command=self._about)
         m.add_cascade(label="Help", menu=h)
         self.config(menu=m)
 
     def _make_layout(self) -> None:
-        head = ttk.Frame(self, padding=(16, 12, 16, 6))
+        head = ttk.Frame(self, padding=(16, 10, 16, 8))
         head.pack(fill="x")
-        ttk.Label(head, text=APP_NAME, style="Title.TLabel").pack(side="left")
-        ttk.Label(head, text="Originals are never modified · no network", style="Muted.TLabel").pack(side="left", padx=(14, 0), pady=(8, 0))
+        brand.Wordmark(head, size=22, with_mark=48).pack(side="left")
+        ttk.Label(head, text="Originals are never modified · no network", style="Muted.TLabel").pack(side="left", padx=(18, 0), pady=(10, 0))
         self.b_theme = ttk.Button(head, text="Dark" if self.theme_mode == "light" else "Light", width=6, command=self._toggle_theme)
         self.b_theme.pack(side="right")
         ttk.Label(head, textvariable=self.v_profile_label, style="Muted.TLabel").pack(side="right", padx=(0, 12), pady=(8, 0))
         ttk.Label(head, text="Profile:", style="Muted.TLabel").pack(side="right", padx=(0, 4), pady=(8, 0))
+        brand.rule(self).pack(fill="x", padx=16)
         # the one status strip, on every tab
-        self.strip = tk.Label(self, textvariable=self.v_strip, anchor="w", padx=16, pady=8, font=("TkDefaultFont", 13, "bold"))
-        self.strip.pack(fill="x", padx=16, pady=(4, 0))
+        self.strip = tk.Label(self, textvariable=self.v_strip, anchor="w", padx=16, pady=8, font=("Helvetica Neue", 13, "bold"))
+        self.strip.pack(fill="x", padx=16, pady=(8, 0))
         self.banner = tk.Label(self, textvariable=self.v_banner, anchor="w", padx=16, pady=5, font=("TkDefaultFont", 12))
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, padx=12, pady=(8, 0))
@@ -286,7 +288,6 @@ class App(tk.Tk):
     def _build_home_tab(self) -> None:
         """A single centred column, as wide as the three action buttons, with a steady vertical rhythm."""
         t = self.tab_home
-        accent = theme.style_or("Accent.TButton")
         COL = 840
         t.columnconfigure(0, weight=1)
         t.columnconfigure(2, weight=1)
@@ -298,17 +299,16 @@ class App(tk.Tk):
         box.rowconfigure(3, weight=1)                 # the space between the card and the step strip absorbs extra height
         head = ttk.Frame(box)
         head.grid(row=0, column=0, sticky="ew")
-        ttk.Label(head, text="Pseudonymise DICOM studies for blinded research reads.", font=("TkDefaultFont", 22, "bold"), wraplength=COL).pack(anchor="w")
-        ttk.Label(head, text="Built and validated on cardiac CT. Every output is checked before it is shared.", font=("TkDefaultFont", 14), style="Muted.TLabel", wraplength=COL).pack(anchor="w", pady=(6, 0))
+        brand.Wordmark(head, size=34, with_mark=96).pack(anchor="w")
+        ttk.Label(head, text="Pseudonymise DICOM studies for blinded research reads.", font=("Helvetica Neue", 18), wraplength=COL).pack(anchor="w", pady=(12, 0))
+        ttk.Label(head, text="Built and validated on cardiac CT. Every output is checked before it is shared.", font=("Helvetica Neue", 13), style="Muted.TLabel", wraplength=COL).pack(anchor="w", pady=(4, 0))
         tiles = ttk.Frame(box)
-        tiles.grid(row=1, column=0, sticky="ew", pady=(36, 0))
-        for i in range(3):
-            tiles.columnconfigure(i, weight=1, uniform="tile")
-        tile, tile_accent = theme.style_or("Tile.TButton"), theme.style_or("Tile.Accent.TButton", accent)
-        for i, (text, cmd, style) in enumerate((("Start\nanonymise scans", lambda: self._goto_step(0), tile_accent),
-                                                ("Try it\non two sample patients", self._run_demo, tile),
-                                                ("Viewer\nscans and headers", lambda: self._viewer("source"), tile))):
-            ttk.Button(tiles, text=text, style=style, command=cmd).grid(row=0, column=i, sticky="ew", padx=(0 if i == 0 else 8, 0 if i == 2 else 8), ipady=38)
+        tiles.grid(row=1, column=0, sticky="ew", pady=(32, 0))
+        tw = (COL - 32) // 3
+        for i, (title, sub, colour, cmd) in enumerate((("Start", "Anonymise scans: the guided flow", brand.NAVY, lambda: self._goto_step(0)),
+                                                       ("Try it", "Two sample patients, twenty seconds", brand.TEAL_DARK, self._run_demo),
+                                                       ("Viewer", "Scans, headers, and what changes", brand.SLATE, lambda: self._viewer("source")))):
+            brand.Tile(tiles, title, sub, colour, cmd, width=tw, height=124).grid(row=0, column=i, padx=(0 if i == 0 else 16, 0))
         self.v_home_recent = tk.StringVar(value="")
         recent = ttk.LabelFrame(box, text="This session", padding=(14, 8, 14, 12))
         recent.grid(row=2, column=0, sticky="ew", pady=(36, 0))
@@ -323,12 +323,18 @@ class App(tk.Tk):
         steps.grid(row=4, column=0, sticky="ew", pady=(40, 0))
         for i in range(4):
             steps.columnconfigure(i, weight=1, uniform="step")
-        for i, (title, text) in enumerate((("1  Anonymise", "point it at the scans, preview, go"), ("2  Check series", "what was kept, what was dropped"),
-                                            ("3  Verify output", "every file re-read for identifiers"), ("4  Share safely", "move the linking logs out, hand over"))):
+        for i, (title, text) in enumerate((("Anonymise", "point it at the scans, preview, go"), ("Check series", "what was kept, what was dropped"),
+                                            ("Verify output", "every file re-read for identifiers"), ("Share safely", "move the linking logs out, hand over"))):
             f = ttk.Frame(steps)
             f.grid(row=0, column=i, sticky="nw", padx=(0, 12))
-            ttk.Label(f, text=title, style="H2.TLabel").pack(anchor="w")
-            ttk.Label(f, text=text, style="Muted.TLabel", wraplength=190, justify="left").pack(anchor="w", pady=(2, 0))
+            row = ttk.Frame(f)
+            row.pack(anchor="w")
+            num = tk.Canvas(row, width=28, height=28, highlightthickness=0, bg=brand._parent_bg(row))
+            num.create_oval(1, 1, 27, 27, fill=brand.TEAL, outline=brand.TEAL)
+            num.create_text(14, 14, text=str(i + 1), fill="white", font=("Helvetica Neue", 12, "bold"))
+            num.pack(side="left", padx=(0, 8))
+            ttk.Label(row, text=title, style="H2.TLabel").pack(side="left")
+            ttk.Label(f, text=text, style="Muted.TLabel", wraplength=190, justify="left").pack(anchor="w", pady=(4, 0))
 
     def _refresh_home(self) -> None:
         out = self._out()
@@ -375,6 +381,7 @@ class App(tk.Tk):
         switch = theme.style_or("Switch.TCheckbutton")
         accent = theme.style_or("Accent.TButton")
         csv_t = [("CSV files", "*.csv"), ("All files", "*")]
+        self.brand_titles: list = []
 
         stack = ttk.Frame(t)
         stack.grid(row=0, column=0, sticky="nsew")
@@ -386,7 +393,9 @@ class App(tk.Tk):
 
         # ---- step 1: scans
         s1 = self.steps[0]
-        ttk.Label(s1, text=STEP_TITLES[0], style="Title.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        t1 = ttk.Label(s1, text=STEP_TITLES[0], font=("Helvetica Neue", 22, "bold"), foreground=brand.NAVY_DEEP)
+        t1.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        self.brand_titles.append(t1)
         self._step_nav(s1, 0)
         tiles = ttk.Frame(s1)
         tiles.grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 8))
@@ -423,7 +432,9 @@ class App(tk.Tk):
 
         # ---- step 2: output
         s2 = self.steps[1]
-        ttk.Label(s2, text=STEP_TITLES[1], style="Title.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        t2 = ttk.Label(s2, text=STEP_TITLES[1], font=("Helvetica Neue", 22, "bold"), foreground=brand.NAVY_DEEP)
+        t2.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        self.brand_titles.append(t2)
         self._step_nav(s2, 1)
         self._row(s2, 1, "Output folder", self.v_output, "dir", "One folder per patient plus _logs and _review will be created here. Only anonymised files and non-confidential logs ever go here.")
         ttk.Button(s2, text="Open", command=lambda: self._open(self._out())).grid(row=1, column=4, padx=(8, 0))
@@ -436,7 +447,9 @@ class App(tk.Tk):
 
         # ---- step 3: review and go
         s3 = self.steps[2]
-        ttk.Label(s3, text=STEP_TITLES[2], style="Title.TLabel").grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        t3 = ttk.Label(s3, text=STEP_TITLES[2], font=("Helvetica Neue", 22, "bold"), foreground=brand.NAVY_DEEP)
+        t3.grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 10))
+        self.brand_titles.append(t3)
         self._step_nav(s3, 2)
         ttk.Label(s3, text="Profile").grid(row=1, column=0, sticky="w", padx=(0, 12), pady=6)
         prow = ttk.Frame(s3)
@@ -484,7 +497,9 @@ class App(tk.Tk):
         self.b_back.pack(side="left")
         self.b_next = ttk.Button(nav, text="Next", width=10, style=accent, command=lambda: self._show_step(self.step + 1))
         self.b_next.pack(side="left", padx=(8, 0))
-        ttk.Label(nav, textvariable=self.v_step, style="Muted.TLabel").pack(side="left", padx=(16, 0))
+        self.pills = brand.StepPills(nav, 3, 0, ("Scans", "Output", "Go"))
+        self.pills.pack(side="left", padx=(16, 0))
+        ttk.Label(nav, textvariable=self.v_step, style="Muted.TLabel").pack(side="left", padx=(8, 0))
         self.v_nav_reason = tk.StringVar(value="")
         ttk.Label(nav, textvariable=self.v_nav_reason, style="Warn.TLabel", wraplength=520, justify="left").pack(side="left", padx=(16, 0))
         more = ttk.Menubutton(nav, text="More")
@@ -578,7 +593,9 @@ class App(tk.Tk):
                 s.tkraise()
             else:
                 s.lower()
-        self.v_step.set(f"Step {self.step + 1} of 3: {STEP_TITLES[self.step]}")
+        self.v_step.set(STEP_TITLES[self.step])
+        if hasattr(self, "pills"):
+            self.pills.set(self.step)
         self.b_back.state(["!disabled"] if self.step > 0 else ["disabled"])
         if self.step == 2:
             self.b_next.pack_forget()
@@ -814,6 +831,8 @@ class App(tk.Tk):
     # ================================================================== theme, validation, status
     def _apply_theme_colours(self) -> None:
         pal = theme.palette()
+        for lbl in getattr(self, "brand_titles", []):
+            lbl.configure(foreground=brand.OFF if theme.current() == "dark" else brand.NAVY_DEEP)
         for w in (self.log, self.txt_verify, self.txt_help):
             theme.style_text(w)
         theme.tag_colours(self.log, ("error", "warn", "ok"))
@@ -960,8 +979,8 @@ class App(tk.Tk):
                     text, level = "Verified. Read the warnings on Share safely before handing over.", "warn"
                 else:
                     text, level = "Verified. Safe to hand over.", "ok"
-        colours = {"muted": (pal["border"], pal["text"]), "info": (pal["accent"], "#ffffff"), "ok": (pal["ok"], "#ffffff"),
-                   "warn": (pal["warn"], "#1f2328"), "error": (pal["error"], "#ffffff")}
+        colours = {"muted": (pal["border"], pal["text"]), "info": (brand.NAVY, "#ffffff"), "ok": (brand.TEAL_DARK, "#ffffff"),
+                   "warn": (brand.AMBER, "#1f2328"), "error": (brand.RED, "#ffffff")}
         bg, fg = colours.get(level or "muted", colours["muted"])
         self.v_strip.set(text)
         self.strip.configure(bg=bg, fg=fg)
@@ -1273,6 +1292,17 @@ class App(tk.Tk):
         self.lbl_ready.configure(style="Ok.TLabel")
         self.lift()
         self.b_start.focus_set()
+
+    def _about(self) -> None:
+        win = tk.Toplevel(self)
+        win.title(f"About {APP_NAME}")
+        win.transient(self)
+        win.resizable(False, False)
+        f = ttk.Frame(win, padding=24)
+        f.pack(fill="both", expand=True)
+        brand.Wordmark(f, size=26, with_mark=96).pack(anchor="w")
+        ttk.Label(f, text=model.about_text(), justify="left", wraplength=520).pack(anchor="w", pady=(14, 16))
+        ttk.Button(f, text="Close", command=win.destroy).pack(anchor="e")
 
     def _viewer(self, mode: str, study_id: str | None = None) -> None:
         w = open_viewer(self, mode, study_id)
