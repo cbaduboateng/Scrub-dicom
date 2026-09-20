@@ -36,7 +36,8 @@ serif.
 ## Sizes and files
 
 `make_icons.py` writes `icon.png` (1024), `icon.ico` (16 to 256), `icon.icns` (16 to 1024 at 1x and 2x)
-and `scrubdicom/app/assets/mark.png` (192) for the app's header, Home page and About box. `python packaging/icons/make_icons.py --sheet` produces a
+and `scrubdicom/app/assets/mark_<px>.png` at 24 to 192 px for the app's header and About box (each size is
+resampled by the generator; Tk never scales an image, which would pixelate it). `python packaging/icons/make_icons.py --sheet` produces a
 review sheet showing every size, the light variant, the glyph and the wordmark.
 
 ## Where it appears

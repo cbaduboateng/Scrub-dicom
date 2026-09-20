@@ -160,7 +160,9 @@ def main() -> int:
     mark(1024).save(HERE / "icon.png")
     mark(256).save(HERE / "icon.ico", sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
     ASSETS.mkdir(parents=True, exist_ok=True)
-    mark(192).save(ASSETS / "mark.png")          # the in-app header and Home page
+    for px in (24, 32, 48, 64, 96, 128, 192):       # exact sizes for the app; resampled here, never shrunk by Tk
+        mark(px).save(ASSETS / f"mark_{px}.png")
+    (ASSETS / "mark.png").unlink(missing_ok=True)
     if sys.platform == "darwin" and shutil.which("iconutil"):
         iconset = HERE / "icon.iconset"
         iconset.mkdir(exist_ok=True)

@@ -24,16 +24,18 @@ _ASSETS = Path(__file__).with_name("assets")
 _cache: dict[tuple[int, str], tk.PhotoImage] = {}
 
 
+SIZES = (24, 32, 48, 64, 96, 128, 192)
+
+
 def mark_image(root: tk.Misc, size: int) -> tk.PhotoImage | None:
-    """The mark as a PhotoImage at 192, 96, 64, 48, 32 or 24 px (integer subsamples of the 192 px asset)."""
+    """The mark as a PhotoImage. Each size is a separate file resampled properly by the icon generator; Tk never
+    scales it, so edges stay clean."""
+    size = min(SIZES, key=lambda s: abs(s - size))
     key = (size, id(root.tk))          # per Tcl interpreter: a new window after the old one closed gets its own image
     if key in _cache:
         return _cache[key]
     try:
-        img = tk.PhotoImage(master=root, file=str(_ASSETS / "mark.png"))
-        factor = max(1, round(192 / size))
-        if factor > 1:
-            img = img.subsample(factor, factor)
+        img = tk.PhotoImage(master=root, file=str(_ASSETS / f"mark_{size}.png"))
     except tk.TclError:
         return None
     _cache[key] = img
