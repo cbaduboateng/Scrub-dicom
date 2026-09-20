@@ -272,6 +272,7 @@ class App(tk.Tk):
         for tab, name in ((self.tab_home, "Home"), (self.tab_run, "1  Anonymise"), (self.tab_series, "2  Check series"), (self.tab_verify, "3  Verify output"),
                           (self.tab_share, "4  Share safely"), (self.tab_help, "Help")):
             self.nb.add(tab, text=name)
+        self.brand_titles: list = []
         self._build_home_tab()
         self._build_run_tab()
         self._build_series_tab()
@@ -299,9 +300,10 @@ class App(tk.Tk):
         box.rowconfigure(3, weight=1)                 # the space between the card and the step strip absorbs extra height
         head = ttk.Frame(box)
         head.grid(row=0, column=0, sticky="ew")
-        brand.Wordmark(head, size=34, with_mark=96).pack(anchor="w")
-        ttk.Label(head, text="Pseudonymise DICOM studies for blinded research reads.", font=("Helvetica Neue", 18), wraplength=COL).pack(anchor="w", pady=(12, 0))
-        ttk.Label(head, text="Built and validated on cardiac CT. Every output is checked before it is shared.", font=("Helvetica Neue", 13), style="Muted.TLabel", wraplength=COL).pack(anchor="w", pady=(4, 0))
+        t0 = ttk.Label(head, text="Pseudonymise DICOM studies for blinded research reads.", font=("Helvetica Neue", 24, "bold"), foreground=brand.NAVY_DEEP, wraplength=COL)
+        t0.pack(anchor="w")
+        self.brand_titles.append(t0)
+        ttk.Label(head, text="Built and validated on cardiac CT. Every output is checked before it is shared.", font=("Helvetica Neue", 14), style="Muted.TLabel", wraplength=COL).pack(anchor="w", pady=(6, 0))
         tiles = ttk.Frame(box)
         tiles.grid(row=1, column=0, sticky="ew", pady=(32, 0))
         tw = (COL - 32) // 3
@@ -381,7 +383,6 @@ class App(tk.Tk):
         switch = theme.style_or("Switch.TCheckbutton")
         accent = theme.style_or("Accent.TButton")
         csv_t = [("CSV files", "*.csv"), ("All files", "*")]
-        self.brand_titles: list = []
 
         stack = ttk.Frame(t)
         stack.grid(row=0, column=0, sticky="nsew")
