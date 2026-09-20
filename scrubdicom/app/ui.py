@@ -427,8 +427,8 @@ class App(tk.Tk):
         for i, (text, var, width) in enumerate((("old ID", self.v_current_col, 12), ("new ID", self.v_new_col, 12), ("sheet", self.v_sheet, 8))):
             ttk.Label(cols, text=text).grid(row=0, column=2 * i, sticky="w", padx=(0 if i == 0 else 12, 4))
             ttk.Entry(cols, textvariable=var, width=width).grid(row=0, column=2 * i + 1, sticky="w")
-        ttk.Label(cols, text="old ID is the").grid(row=0, column=6, sticky="w", padx=(12, 4))
-        ttk.Combobox(cols, textvariable=self.v_match_on_label, values=tuple(MATCH_ON_LABELS.values()), state="readonly", width=19).grid(row=0, column=7, sticky="w")
+        ttk.Label(cols, text="the old ID is the").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
+        ttk.Combobox(cols, textvariable=self.v_match_on_label, values=tuple(MATCH_ON_LABELS.values()), state="readonly", width=22).grid(row=1, column=2, columnspan=4, sticky="w", pady=(6, 0))
         ttk.Checkbutton(s1, text="More ways and options", variable=self.v_more, command=self._apply_mode, style=toggle).grid(row=8, column=0, columnspan=4, sticky="w", pady=(10, 0))
 
         # ---- step 2: output
