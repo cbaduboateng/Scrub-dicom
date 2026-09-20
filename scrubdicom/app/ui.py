@@ -508,7 +508,9 @@ class App(tk.Tk):
         ttk.Label(self.card, textvariable=self.v_card_text, wraplength=800, justify="left").grid(row=1, column=0, sticky="w", pady=(2, 0))
         self.b_card = ttk.Button(self.card, text="", style=accent)
         self.b_card.grid(row=0, column=1, rowspan=2, padx=(16, 0))
-        ttk.Button(self.card, text="Dismiss", command=self._hide_card).grid(row=0, column=2, rowspan=2, padx=(8, 0))
+        self.b_card2 = ttk.Button(self.card, text="")
+        self.b_card2.grid(row=0, column=2, rowspan=2, padx=(8, 0))
+        ttk.Button(self.card, text="Dismiss", command=self._hide_card).grid(row=0, column=3, rowspan=2, padx=(8, 0))
         self.card.grid_remove()
 
         # ---- progress and activity
@@ -975,7 +977,8 @@ class App(tk.Tk):
             if logs:
                 self.log_path = logs / f"app_{log_name}_{time.strftime('%Y%m%d_%H%M%S')}.txt"
         self._clear_log()
-        self._hide_card()
+        if job != "verify":
+            self._hide_card()
         self.skipped_hidden = 0
         self.prog_state = {"n": 0, "total": 0, "study": "", "files": 0, "expected": None, "known": False}
         self._bar_mode(False)
@@ -1066,6 +1069,15 @@ class App(tk.Tk):
                 summary = next((l.strip() for l in reversed(log_text.splitlines()) if l.strip().startswith("DRY RUN")), "Preview finished.")
                 self._show_card("Preview done: nothing was written", summary + "  Look at the images and the header before/after in the viewer, then press Anonymise.",
                                 "Open viewer", lambda: self._viewer("source"))
+            if job == "run":
+                done_line = next((l.strip() for l in reversed(log_text.splitlines()) if l.strip().startswith("Done in")), "Anonymisation finished.")
+                self._show_card("Anonymised", done_line + ("  The check is running now." if self.v_verify_after.get() else "  Run the check before sharing."),
+                                "View the anonymised output", lambda: self._viewer("output"),
+                                None if self.v_verify_after.get() else "Check now", None if self.v_verify_after.get() else self._start_verify)
+            if job == "verify":
+                self._show_card("Verified: safe to hand over", "Every output file was re-read and found clean. The checksum manifest and attestation are in _logs and travel with the output.",
+                                "Open the final folder", lambda: self._open(self._out()),
+                                "View the anonymised output", lambda: self._viewer("output"))
         elif stopped:
             self.v_progress_text.set(f"{title} stopped after {took}")
             self.v_status.set(f"{title} stopped")
@@ -1089,7 +1101,7 @@ class App(tk.Tk):
         if job == "run" and rc == 0 and self.v_verify_after.get():
             self.after(400, self._start_verify)
         elif job == "verify" and self.demo_stage != "verify":
-            self.nb.select(self.tab_verify)
+            self.nb.select(self.tab_run)
         if self.demo_stage == "preview" and job == "dry" and rc == 0:
             self.demo_stage = "run"
             self.after(600, self._start_run)
@@ -1105,8 +1117,6 @@ class App(tk.Tk):
 
     def _recovery(self, job: str | None, rc: int | None, stopped: bool, log_text: str) -> None:
         if rc == 0 or stopped:
-            if job == "verify" and rc == 0:
-                self._hide_card()
             return
         if "no longer reachable" in log_text or "drive disappeared" in log_text or "Could not write the completion marker" in log_text:
             self._show_card("The output drive disconnected", "Completed patients are safe. Reconnect the drive, then press Resume: the run continues where it stopped.",
@@ -1121,10 +1131,15 @@ class App(tk.Tk):
             self._show_card(f"{'Preview' if job == 'dry' else 'The run'} did not finish", "The last lines of the activity log say why. Copy them if you need to ask for help.",
                             "Copy log", self._copy_log)
 
-    def _show_card(self, title: str, text: str, button: str, command) -> None:
+    def _show_card(self, title: str, text: str, button: str, command, button2: str | None = None, command2=None) -> None:
         self.v_card_title.set(title)
         self.v_card_text.set(text)
         self.b_card.configure(text=button, command=command)
+        if button2:
+            self.b_card2.configure(text=button2, command=command2)
+            self.b_card2.grid()
+        else:
+            self.b_card2.grid_remove()
         self.card.grid()
 
     def _hide_card(self) -> None:
