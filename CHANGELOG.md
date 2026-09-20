@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+- Windows fix: `run --input ... --confidential` did not refuse a confidential folder inside the output tree, because the
+  two paths were compared with and without the `\\?\` long-path prefix (manifest runs were unaffected). Both sides are
+  now normalised before the check. Found by the first Windows CI run.
+- Lock file: the Windows-only PyInstaller dependencies (`pefile`, `pywin32-ctypes`) are pinned with hashes so the
+  Windows build and CI install in `--require-hashes` mode.
+
 ## 0.6.0 (2026-09-18)
 Security hardening, and tick-box series selection.
 - Viewer: a "Use" tick per series; "Anonymise only the ticked series" writes a selection the run honours

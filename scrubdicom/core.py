@@ -576,7 +576,10 @@ def confidential_dir(a: argparse.Namespace, out: Path) -> tuple[Path, bool]:
     c = getattr(a, "confidential", None)
     if c:
         conf = win_path(Path(c).resolve())
-        if conf == out or out in conf.parents or conf in out.parents:
+        # compare like with like: on Windows the caller may pass the output with or without the \\?\ prefix, and
+        # 'C:\out' is not a parent of '\\?\C:\out\secret' as far as pathlib is concerned
+        o = win_path(Path(out).resolve())
+        if conf == o or o in conf.parents or conf in o.parents:
             sys.exit(f"--confidential must be a folder outside the output tree: {conf}")
         return conf, True
     return out / "_logs", False

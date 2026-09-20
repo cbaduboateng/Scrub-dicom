@@ -240,8 +240,9 @@ def test_spec_to_settings_skips_study_id(tmp_path):
 
 def test_external_viewer_command(monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
-    assert model.external_viewer_command(Path("/x/f.dcm"), "/Applications/Bee DICOM Viewer.app") == ["open", "-a", "/Applications/Bee DICOM Viewer.app", "/x/f.dcm"]
-    assert model.external_viewer_command(Path("/x"), "") == ["open", "/x"]
+    f, d = str(Path("/x/f.dcm")), str(Path("/x"))  # pathlib spells these with backslashes on Windows
+    assert model.external_viewer_command(Path("/x/f.dcm"), "/Applications/Bee DICOM Viewer.app") == ["open", "-a", "/Applications/Bee DICOM Viewer.app", f]
+    assert model.external_viewer_command(Path("/x"), "") == ["open", d]
     assert model.viewer_app_name("/Applications/Bee DICOM Viewer.app") == "Bee DICOM Viewer"
     assert model.viewer_app_name("") == "system default viewer"
     assert "external_viewer" in model.SETTINGS_KEYS
