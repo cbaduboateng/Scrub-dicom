@@ -55,7 +55,7 @@ except ImportError:
 
 from scrubdicom.profiles import Profile, load_profile, shift_days_for, shift_da, shift_dt, age_years, age_bucket_5y
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 DUMMY_DATE = "19000101"
 DUMMY_TIME = "111111.111111"
 DUMMY_DATETIME = "19000101111111.111111"

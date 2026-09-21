@@ -3,7 +3,7 @@ REM Build Scrub-DICOM.exe (one folder) and a zip on Windows. Run from a normal c
 REM
 REM     packaging\build_windows.bat
 REM
-REM Needs python.org Python 3.12 installed for the user (the "py" launcher). Makes a private build venv, runs the
+REM Needs python.org Python 3.12 installed for the user (the "py" launcher; or set SCRUBDICOM_PY=python, as CI does). Makes a private build venv, runs the
 REM test suite, freezes with PyInstaller, smoke-tests the frozen app, zips dist\Scrub-DICOM. If Inno Setup's
 REM iscc.exe is on PATH it also builds a per-user installer (no admin rights needed to install).
 REM
@@ -14,6 +14,7 @@ cd /d "%~dp0\.."
 set PYTHONUTF8=1
 
 set "PY=py -3.12"
+if defined SCRUBDICOM_PY set "PY=%SCRUBDICOM_PY%"
 %PY% --version >nul 2>&1 || (echo Python 3.12 from python.org is not installed for this user. & exit /b 1)
 %PY% -c "import sys; sys.exit(1 if 'conda' in sys.version.lower() else 0)" || (echo Refusing to build from conda Python. & exit /b 1)
 

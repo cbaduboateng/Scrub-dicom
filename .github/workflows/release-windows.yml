@@ -1,0 +1,48 @@
+name: Windows build
+
+# Builds the Windows zip and per-user installer on GitHub's Windows machines (there is no Windows box locally).
+# Runs on every version tag and on demand. The build script runs the full test suite, freezes the app, smoke-tests
+# the frozen executable (engine run + verify PASS on synthetic patients, app --selftest) and only then packages.
+# Not code-signed: no Authenticode certificate. Artefacts are attached to the release by hand after a human has
+# installed and opened the result on a real Windows PC.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (windows-2022)
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Put Inno Setup on PATH (preinstalled on the runner image)
+        shell: bash
+        run: |
+          d="/c/Program Files (x86)/Inno Setup 6"
+          if [ -x "$d/ISCC.exe" ]; then echo "C:\\Program Files (x86)\\Inno Setup 6" >> "$GITHUB_PATH"; else echo "::warning::Inno Setup not found; only the zip will be built"; fi
+      - name: Build (tests, freeze, smoke tests, zip, installer)
+        shell: cmd
+        env:
+          SCRUBDICOM_PY: python
+        run: packaging\build_windows.bat
+      - name: List outputs
+        shell: bash
+        run: ls -la dist/*.zip dist/*.sha256 dist/*-setup.exe 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Scrub-DICOM-windows-x64
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/Scrub-DICOM-*-windows-x64.zip
+            dist/Scrub-DICOM-*-windows-x64.zip.sha256
+            dist/Scrub-DICOM-*-setup.exe

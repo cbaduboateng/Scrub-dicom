@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.6.1 (2026-09-21)
+First Windows build, and two Windows fixes found by CI.
+- Windows: first packaged build (`Scrub-DICOM-<version>-windows-x64.zip` and a per-user `-setup.exe`), produced on
+  GitHub's Windows runners by `.github/workflows/release-windows.yml` on every `v*` tag. Not code-signed: SmartScreen
+  shows "unknown publisher" once; More info > Run anyway.
 - Windows fix: `run --input ... --confidential` did not refuse a confidential folder inside the output tree, because the
   two paths were compared with and without the `\\?\` long-path prefix (manifest runs were unaffected). Both sides are
   now normalised before the check. Found by the first Windows CI run.
