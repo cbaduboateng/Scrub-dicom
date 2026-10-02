@@ -105,27 +105,27 @@ class JobSpec:
             p.append("Choose an output folder.")
         if self.mode == "manifest":
             if not self.manifest.strip():
-                p.append("Choose the manifest CSV.")
+                p.append("Choose the patient list (CSV).")
             elif not Path(self.manifest).is_file():
-                p.append(f"Manifest not found: {self.manifest}")
+                p.append(f"Patient list not found: {self.manifest}")
             if self.remap.strip() and "=" not in self.remap:
                 p.append("Path remap must look like OLDPREFIX=NEWPREFIX, e.g. /Volumes/Drive=E:\\")
             if self.series_pick.strip() and not Path(self.series_pick).is_file():
                 p.append(f"Series-pick file not found: {self.series_pick}")
         else:
             if not self.input.strip():
-                p.append("Choose the input folder.")
+                p.append("Choose the folder of scans.")
             elif not Path(self.input).is_dir():
-                p.append(f"Input folder not found: {self.input}")
+                p.append(f"Folder of scans not found: {self.input}")
             if self.mode == "single" and not self.study_id.strip():
                 p.append("Give the study ID to apply to this folder.")
             if self.mode == "single" and self.study_id.strip() and not re.fullmatch(r"[A-Za-z0-9._ -]+", self.study_id.strip()):
                 p.append("Study ID may only contain letters, digits, spaces, '.', '_' and '-'.")
             if self.mode == "mapping":
                 if not self.mapping.strip():
-                    p.append("Choose the mapping file (CSV or XLSX).")
+                    p.append("Choose the ID spreadsheet (CSV or Excel).")
                 elif not Path(self.mapping).is_file():
-                    p.append(f"Mapping file not found: {self.mapping}")
+                    p.append(f"ID spreadsheet not found: {self.mapping}")
         if self.profile.strip() and not Path(self.profile).is_file():
             p.append(f"Profile file not found: {self.profile}")
         if self.series_select.strip() and not Path(self.series_select).is_file():

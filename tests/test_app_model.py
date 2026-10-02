@@ -51,14 +51,14 @@ def test_validation_catches_the_usual_mistakes(tmp_path):
     inp = tmp_path / "in"
     inp.mkdir()
     assert "Choose an output folder." in JobSpec(mode="manifest", manifest="x").validate()
-    assert any("Manifest not found" in p for p in JobSpec(mode="manifest", output="o", manifest=str(tmp_path / "nope.csv")).validate())
+    assert any("Patient list not found" in p for p in JobSpec(mode="manifest", output="o", manifest=str(tmp_path / "nope.csv")).validate())
     assert any("OLDPREFIX=NEWPREFIX" in p for p in JobSpec(mode="manifest", output="o", manifest=__file__, remap="bad").validate())
     assert any("study id" in p.lower() for p in JobSpec(mode="single", output="o", input=str(inp)).validate())
     assert any("only contain" in p for p in JobSpec(mode="single", output="o", input=str(inp), study_id="bad id!").validate())
     assert not any("only contain" in p for p in JobSpec(mode="single", output="o", input=str(inp), study_id="TEST 1").validate()), "spaces are allowed"
     assert any("must not be the input" in p for p in JobSpec(mode="single", output=str(inp), input=str(inp), study_id="S").validate())
     assert any("inside the input" in p for p in JobSpec(mode="single", output=str(inp / "out"), input=str(inp), study_id="S").validate())
-    assert any("mapping file" in p.lower() for p in JobSpec(mode="mapping", output="o", input=str(inp)).validate())
+    assert any("id spreadsheet" in p.lower() for p in JobSpec(mode="mapping", output="o", input=str(inp)).validate())
     assert any("confidential folder" in p.lower() for p in JobSpec(mode="single", output="o", input=str(inp), study_id="S").validate())
     assert any("outside the output" in p for p in JobSpec(mode="single", output=str(tmp_path / "o"), input=str(inp), study_id="S", confidential=str(tmp_path / "o" / "c")).validate())
     assert any("outside the output" in p for p in JobSpec(mode="single", output=str(tmp_path / "o"), input=str(inp), study_id="S", confidential=str(tmp_path)).validate())

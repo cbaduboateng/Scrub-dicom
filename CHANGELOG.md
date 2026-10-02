@@ -3,7 +3,9 @@
 ## 0.7.0 (2026-10-02)
 Folder-first flow, after a live demo showed the first screen asked for lists and spreadsheets before a folder.
 - **Open a folder.** The Anonymise tab is now four plain steps: Open your scans, Which scans do you want?, What
-  should be removed?, Save and go. Step 1 is one button. The app reads the headers under the folder (on a worker
+  should be removed?, Save and go. Step 1 asks one question, One patient or Several patients, and then shows one
+  button. Saying "one patient" and opening a folder of several stops with a plain message and a "Switch to several
+  patients" button. The app reads the headers under the folder (on a worker
   thread, with progress and a Stop button), lists the patients it found and says whether each has a coronary CT
   series. One folder per patient or per study gets an ID each; patients mixed in one folder are recognised by the
   Patient ID inside the scans; an earlier output of this app inside the folder is skipped.
@@ -16,8 +18,9 @@ Folder-first flow, after a live demo showed the first screen asked for lists and
   stable across sessions: re-opening a folder with the same destination folders gives every patient the ID it had.
   The two destination folders are suggested next to the opened folder under names that never include its name.
   Anonymise no longer needs a separate Preview first in this flow: the scan and the series list are the preview.
-- The list-driven methods (patient-list CSV, folder plus ID spreadsheet, one patient) are unchanged behind
-  "I already have a patient list (CSV) or an ID spreadsheet" on step 1.
+- The list-driven methods (patient-list CSV; folder plus ID spreadsheet) are unchanged behind "I already have a
+  patient list (CSV) or an ID spreadsheet" on step 1, shown side by side. The separate "One patient" method is gone
+  from the window: opening that patient's folder does the same thing. (The engine's `--input --study-id` is unchanged.)
 - **Demo.** Two made-up patients with a drawn chest CT (scout, calcium score, 120-slice coronary series), a chest
   X-ray, a dose report and an echo frame, loaded into the ordinary four steps with a "Play it for me" button. The
   old demo printed a dry run of eight noise images into the log.

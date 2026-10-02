@@ -46,16 +46,54 @@ def pump(a, seconds=60.0, until=None):
 
 
 def test_nothing_is_possible_before_a_folder_is_opened(app):
-    steps = app._problems_by_step()
-    assert steps[0] == ["Choose the folder that holds the scans."]
+    # the first screen asks one question and shows nothing else
+    app._goto_step(0)
+    app.update()
+    assert app._problems_by_step()[0] == ["Say whether this is one patient or several."]
+    assert not app.f_folder.winfo_ismapped() and not app.cb_listway.winfo_ismapped() and not app.f_list.winfo_ismapped()
+    app.v_cases.set("one")
+    app._apply_way()
+    app.update()
+    assert app.f_folder.winfo_ismapped() and not app.cb_listway.winfo_ismapped(), "one patient: a folder button, no talk of lists"
+    assert app.b_open.cget("text") == "Choose the patient's folder..."
+    assert app._problems_by_step()[0] == ["Choose the folder that holds the scans."]
+    app.v_cases.set("many")
+    app._apply_way()
+    app.update()
+    assert app.cb_listway.winfo_ismapped() and app.b_open.cget("text") == "Choose the folder of patients..."
     assert app.b_start.instate(["disabled"]) and app._top_next[0].instate(["disabled"])
     assert not app._materialise()
+
+
+def test_one_patient_chosen_but_the_folder_holds_several(app, scans):
+    app._goto_step(0)
+    app.v_cases.set("one")
+    app._apply_way()
+    app._open_folder(str(scans), wait=True)
+    app.update()
+    msg = app._problems_by_step()[0]
+    assert msg and "holds 2 patients, not one" in msg[0] and app.v_found.get() == msg[0]
+    assert app.b_switch.winfo_ismapped() and app.b_start.instate(["disabled"]) and app._top_next[0].instate(["disabled"])
+    app._switch_to_many()
+    app.update()
+    assert not app._problems_by_step()[0] and not app.b_switch.winfo_ismapped() and app.v_found.get().startswith("Found 2 patients")
+    assert app.b_start.instate(["!disabled"])
+    # and the right folder for one patient: a single ID box, not a table
+    app.v_cases.set("one")
+    app._apply_way()
+    app._open_folder(str(scans / "SMITH_JOHN_1234567"), wait=True)
+    app._goto_step(len(app.steps) - 1)
+    app.update()
+    assert not app._problems_by_step()[0] and app.f_one.winfo_ismapped() and not app.f_many.winfo_ismapped()
+    app.v_one_id.set("Case 12")
+    assert app.intake.units[0].new_id == "Case 12" and all(not s for s in app._problems_by_step())
 
 
 def test_open_folder_fills_every_step_and_suggests_safe_destinations(app, scans):
     app._open_folder(str(scans), wait=True)
     it = app.intake
     assert it and len(it.units) == 2 and app.v_found.get().startswith("Found 2 patients")
+    assert app.v_cases.get() == "many", "opened without answering the question: the folder answers it"
     assert len(app.tv_found.get_children("")) == 2 and len(app.tv_kinds.get_children("")) == len(app.kinds) == 6
     assert app.v_choice.get() == "coronary" and [u.new_id for u in it.units] == ["ANON-001", "ANON-002"]
     out, conf = app.v_output.get(), app.v_confidential.get()
@@ -180,5 +218,20 @@ def test_list_driven_methods_are_still_there(app, tmp_path):
     spec = app._spec()
     assert spec.mode == "manifest" and spec.manifest == str(m)
     assert app.rb_choice["choose"].instate(["disabled"]) and not app.f_kinds.winfo_ismapped()
+    # only the two methods that really use a list are offered; a single patient is "Choose folder"
+    assert set(app.tiles) == {"manifest", "mapping"}
+    app._goto_step(0)
+    app.update()
+    assert all(app.tiles[m].winfo_ismapped() for m in app.tiles), "both are visible without hunting for them"
+    app.v_mode.set("single")
+    app._apply_mode()
+    assert app.v_mode.get() == "manifest"
+    app.v_mode.set("mapping")
+    app._apply_mode()
+    app.update()
+    assert app.rows_cols[1].winfo_ismapped(), "the spreadsheet method shows how the old ID is matched without a hidden toggle"
+    app.v_mode.set("manifest")
+    app._apply_mode()
+    app._live_validate()
     assert all(not s for s in app._problems_by_step())
     assert app.b_start.instate(["disabled"]) and app.b_dry.instate(["!disabled"]), "a list-driven run still wants a dry run first"

@@ -46,6 +46,7 @@ MATCH_ON_KEYS = {v: k for k, v in MATCH_ON_LABELS.items()}
 STEP_TITLES = ("Open your scans", "Which scans do you want?", "What should be removed?", "Save and go")
 STEP_SHORT = ("Open", "Scans", "Remove", "Save")
 LAST_STEP = len(STEP_TITLES) - 1
+LIST_MODES = ("manifest", "mapping")      # the methods behind "I already have a patient list"; one patient = open its folder
 WRAP = 900
 SERIES_CHOICES = (
     ("coronary", "Coronary CT only", "the thin contrast series a coronary read needs; scouts, calcium scores, X-rays and reports are left out"),
@@ -309,6 +310,8 @@ class App(tk.Tk):
         self.v_listway = tk.BooleanVar(value=False)
         self.v_folder = tk.StringVar()
         self.v_folder_shown = tk.StringVar()
+        self.v_cases = tk.StringVar(value="")                # "" until the user says: one | many
+        self.v_folder_help = tk.StringVar()
         self.v_found = tk.StringVar(value="")
         self.v_found_notes = tk.StringVar(value="")
         self.v_choice = tk.StringVar(value="coronary" if self.v_ctca.get() else "all")
@@ -499,14 +502,22 @@ class App(tk.Tk):
 
         # ---- step 1: open a folder
         s1 = self.steps[0]
+        q = ttk.Frame(s1)
+        q.grid(row=1, column=0, columnspan=5, sticky="w", pady=(0, 12))
+        ttk.Label(q, text="What are you anonymising?", style="H2.TLabel").pack(anchor="w", pady=(0, 8))
+        qt = ttk.Frame(q)
+        qt.pack(anchor="w")
+        self.case_tiles = {}
+        for key, text in (("one", "One patient\na single case"), ("many", "Several patients\na folder of cases")):
+            rb = ttk.Radiobutton(qt, text=text, value=key, variable=self.v_cases, command=self._apply_way, style=toggle, width=24)
+            rb.pack(side="left", padx=(0, 10), ipady=14)
+            self.case_tiles[key] = rb
         ff = self.f_folder = ttk.Frame(s1)
-        ff.grid(row=1, column=0, columnspan=5, sticky="nsew")
+        ff.grid(row=2, column=0, columnspan=5, sticky="nsew")
         ff.columnconfigure(1, weight=1)
         ff.rowconfigure(4, weight=1)
-        s1.rowconfigure(1, weight=1)
-        ttk.Label(ff, text="Choose the folder that holds the scans: one patient or a whole cohort. Every sub-folder is searched. Nothing in it is changed.",
-                  style="Muted.TLabel", wraplength=WRAP, justify="left").grid(row=0, column=0, columnspan=3, sticky="w")
-        self.b_open = ttk.Button(ff, text="Choose folder...", style=accent, width=18, command=self._open_folder)
+        ttk.Label(ff, textvariable=self.v_folder_help, style="Muted.TLabel", wraplength=WRAP, justify="left").grid(row=0, column=0, columnspan=3, sticky="w")
+        self.b_open = ttk.Button(ff, text="Choose folder...", style=accent, width=28, command=self._open_folder)
         self.b_open.grid(row=1, column=0, sticky="w", pady=(10, 8), ipady=6)
         self.lbl_folder = ttk.Label(ff, textvariable=self.v_folder_shown, style="Muted.TLabel")
         self.lbl_folder.grid(row=1, column=1, sticky="w", padx=(12, 0))
@@ -514,23 +525,28 @@ class App(tk.Tk):
         self.b_scan_stop = ttk.Button(ff, text="Stop reading", command=self._cancel_scan)
         self.b_scan_stop.grid(row=1, column=2, sticky="e")
         self.b_scan_stop.grid_remove()
-        ttk.Label(ff, textvariable=self.v_found, style="Big.TLabel", wraplength=WRAP, justify="left").grid(row=2, column=0, columnspan=3, sticky="w")
+        fr = ttk.Frame(ff)
+        fr.grid(row=2, column=0, columnspan=3, sticky="w")
+        self.lbl_found = ttk.Label(fr, textvariable=self.v_found, style="Big.TLabel", wraplength=WRAP - 260, justify="left")
+        self.lbl_found.pack(side="left")
+        self.b_switch = ttk.Button(fr, text="Switch to several patients", command=self._switch_to_many)
         ttk.Label(ff, textvariable=self.v_found_notes, style="Muted.TLabel", wraplength=WRAP, justify="left").grid(row=3, column=0, columnspan=3, sticky="w", pady=(2, 6))
         fc = ttk.Frame(ff)
         fc.grid(row=4, column=0, columnspan=3, sticky="nsew")
         fc.columnconfigure(0, weight=1)
         fc.rowconfigure(0, weight=1)
         self.tv_found = self._tree(fc, [("folder", "Folder", 300), ("pid", "Patient ID in the scans", 170), ("series", "Series", 60),
-                                        ("images", "Images", 70), ("cor", "Coronary CT", 260)], height=6, xscroll=False)
+                                        ("images", "Images", 70), ("cor", "Coronary CT", 260)], height=4, xscroll=False)
 
         fl = self.f_list = ttk.Frame(s1)
-        fl.grid(row=2, column=0, columnspan=5, sticky="nsew")
+        fl.grid(row=3, column=0, columnspan=5, sticky="nsew")
         fl.columnconfigure(1, weight=1)
         tiles = ttk.Frame(fl)
         tiles.grid(row=1, column=0, columnspan=4, sticky="w", pady=(0, 8))
         self.tiles = {}
-        texts = {"manifest": "A list of patients\nCSV: folder, new ID", "single": "One patient\nfolder + new ID", "mapping": "Folder of patients\n+ ID spreadsheet"}
-        for mode in model.MODES:
+        # a single patient needs no list: that is what "Choose folder" does, so only the two list-driven methods are offered here
+        texts = {"manifest": "A list of patients\nCSV: folder, new ID", "mapping": "Folder of patients\n+ ID spreadsheet"}
+        for mode in LIST_MODES:
             rb = ttk.Radiobutton(tiles, text=texts[mode], value=mode, variable=self.v_mode, command=self._apply_mode, style=toggle, width=22)
             rb.pack(side="left", padx=(0, 10), ipady=14)
             self.tiles[mode] = rb
@@ -557,8 +573,9 @@ class App(tk.Tk):
             ttk.Entry(cols, textvariable=var, width=width).grid(row=0, column=2 * i + 1, sticky="w")
         ttk.Label(cols, text="the old ID is the").grid(row=1, column=0, columnspan=2, sticky="w", pady=(6, 0))
         ttk.Combobox(cols, textvariable=self.v_match_on_label, values=tuple(MATCH_ON_LABELS.values()), state="readonly", width=22).grid(row=1, column=2, columnspan=4, sticky="w", pady=(6, 0))
-        ttk.Checkbutton(fl, text="More ways and options", variable=self.v_more, command=self._apply_mode, style=toggle).grid(row=8, column=0, columnspan=4, sticky="w", pady=(10, 0))
-        ttk.Checkbutton(s1, text="I already have a patient list (CSV) or an ID spreadsheet", variable=self.v_listway, command=self._apply_way).grid(row=3, column=0, columnspan=4, sticky="w", pady=(12, 0))
+        ttk.Checkbutton(fl, text="Rarely needed options", variable=self.v_more, command=self._apply_mode, style=toggle).grid(row=8, column=0, columnspan=4, sticky="w", pady=(10, 0))
+        self.cb_listway = ttk.Checkbutton(s1, text="I already have a patient list (CSV) or an ID spreadsheet", variable=self.v_listway, command=self._apply_way)
+        self.cb_listway.grid(row=4, column=0, columnspan=4, sticky="w", pady=(12, 0))
 
         # ---- step 2: which scans
         s2 = self.steps[1]
@@ -756,10 +773,25 @@ class App(tk.Tk):
 
     def _apply_way(self) -> None:
         """Folder-first (the default) or the list-driven methods: show the matching half of each step."""
+        cases = self.v_cases.get()
+        if self.v_listway.get() and cases != "many":
+            if cases == "one":
+                self.v_listway.set(False)             # a list only makes sense for several patients
+            else:
+                cases = "many"                        # asked for the list methods without answering: that is several patients
+                self.v_cases.set(cases)
         listway = self.v_listway.get()
         self.v_way.set("list" if listway else "folder")
+        show_folder = bool(cases) and not listway     # nothing but the question until it has been answered
         (self.f_list.grid if listway else self.f_list.grid_remove)()
-        (self.f_folder.grid_remove if listway else self.f_folder.grid)()
+        (self.f_folder.grid if show_folder else self.f_folder.grid_remove)()
+        (self.cb_listway.grid if cases == "many" else self.cb_listway.grid_remove)()
+        self.steps[0].rowconfigure(2, weight=1 if show_folder else 0)
+        one = cases == "one"
+        self.v_folder_help.set("Choose this patient's folder. Every sub-folder is searched. Nothing in it is changed." if one else
+                               "Choose the folder that holds all the patients, each in a folder of their own. Every sub-folder is searched. Nothing in it is changed.")
+        self.b_open.configure(text="Choose the patient's folder..." if one else "Choose the folder of patients...")
+        self._refresh_found_headline()
         (self.f_kinds.grid_remove if listway else self.f_kinds.grid)()
         (self.lbl_list_series.grid if listway else self.lbl_list_series.grid_remove)()
         (self.f_ids.grid_remove if listway else self.f_ids.grid)()
@@ -769,20 +801,17 @@ class App(tk.Tk):
         mode = self.v_mode.get()
         more = self.v_more.get()
         listway = self.v_way.get() == "list"
-        if mode == "mapping" and not more and listway:
-            self.v_more.set(True)
-            more = True
-        if more:
-            self.tiles["mapping"].pack(side="left", padx=(0, 10), ipady=14)
-        else:
-            self.tiles["mapping"].pack_forget()
-        groups = {"manifest": self.rows_manifest, "single": self.rows_input + self.rows_study_id, "mapping": self.rows_input + self.rows_mapping}
-        adv_groups = {"manifest": self.rows_remap + self.rows_picks, "single": [], "mapping": self.rows_cols}
-        every = set(sum(groups.values(), []) + sum(adv_groups.values(), []))
+        if mode not in LIST_MODES:      # an older setting, or the engine's single-folder mode: not offered in this window
+            mode = "manifest"
+            self.v_mode.set(mode)
+        # the spreadsheet method always shows how the old ID is matched; the patient list keeps its extras behind the toggle
+        groups = {"manifest": self.rows_manifest, "mapping": self.rows_input + self.rows_mapping + self.rows_cols}
+        adv_groups = {"manifest": self.rows_remap + self.rows_picks, "mapping": []}
+        every = set(sum(groups.values(), []) + sum(adv_groups.values(), [])) | set(self.rows_study_id)
         show = set(groups.get(mode, [])) | (set(adv_groups.get(mode, [])) if more else set())
         for w in every:
             (w.grid if w in show else w.grid_remove)()
-        (self.adv1.grid if more and adv_groups.get(mode) else self.adv1.grid_remove)()
+        (self.adv1.grid if mode == "mapping" or (more and adv_groups.get(mode)) else self.adv1.grid_remove)()
         (self.adv3.pack if more else self.adv3.pack_forget)(**({"side": "left"} if more else {}))
         manifest = mode == "manifest" or not listway
         self.cb_resume.state(["!disabled"] if manifest and not (self.intake and self.intake.mixed and not listway) else ["disabled"])
@@ -815,7 +844,34 @@ class App(tk.Tk):
         self.v_listway.set(False)
         self._apply_way()
         self._goto_step(0)
-        self._open_folder()
+
+    def _case_mismatch(self) -> str:
+        """Said 'one patient' but the folder holds several: almost always the wrong folder, so say so and stop."""
+        it = self.intake
+        if self.v_cases.get() == "one" and it and it.n_patients > 1 and self.v_way.get() == "folder":
+            return f"This folder holds {it.n_patients} patients, not one. Choose that one patient's folder, or switch to several patients."
+        return ""
+
+    def _refresh_found_headline(self) -> None:
+        it = self.intake
+        if self._scanning() or not hasattr(self, "b_switch"):
+            return
+        bad = self._case_mismatch()
+        if it is None:
+            self.v_found.set("")
+        else:
+            self.v_found.set(bad or (it.problems[0] if it.problems else it.headline()))
+        self.lbl_found.configure(style="Warn.TLabel" if bad else "Big.TLabel")
+        if bad:
+            self.b_switch.pack(side="left", padx=(12, 0))
+        else:
+            self.b_switch.pack_forget()
+
+    def _switch_to_many(self) -> None:
+        self.v_cases.set("many")
+        self._apply_way()
+        self._fill_ids()
+        self._live_validate()
 
     def _scanning(self) -> bool:
         return self._scan_thread is not None and self._scan_thread.is_alive()
@@ -884,7 +940,8 @@ class App(tk.Tk):
         notes = list(it.notes)
         if it.cancelled:
             notes.insert(0, "Reading was stopped early: only what was read so far is listed.")
-        self.v_found.set(it.problems[0] if it.problems else it.headline())
+        if it.units and not self.v_cases.get():       # opened without answering the question (the demo, the tests): the folder answers it
+            self.v_cases.set("one" if it.n_patients == 1 else "many")
         if it.units:
             none = sum(1 for u in it.units if not any(s.verdict == "keep" for s in u.series))
             if none and none < len(it.units):
@@ -898,7 +955,7 @@ class App(tk.Tk):
                 self.v_confidential.set(conf)
             self.v_choice.set("coronary" if any(k.coronary for k in self.kinds) and not self.rb_choice["coronary"].instate(["disabled"]) else "all")
         self.v_found_notes.set("  ".join(notes))
-        self._apply_mode()
+        self._apply_way()
         self._assign_ids(force=True)
         self._fill_found()
         self._fill_kinds()
@@ -1468,10 +1525,14 @@ class App(tk.Tk):
         if self.v_way.get() == "list":
             return [[p for p in vp if p not in dest and p not in prof], [], prof, dest]
         it = self.intake
-        if self._scanning():
+        if not self.v_cases.get():
+            s0 = ["Say whether this is one patient or several."]
+        elif self._scanning():
             s0 = ["The folder is still being read."]
         elif it is None:
             s0 = ["Choose the folder that holds the scans."]
+        elif self._case_mismatch():
+            s0 = [self._case_mismatch()]
         elif not it.units:
             s0 = [it.problems[0] if it.problems else "No DICOM scans were found in that folder."]
         else:
@@ -2145,6 +2206,7 @@ class App(tk.Tk):
         self.demo_stage = None
         self._hide_card()
         self.v_listway.set(False)
+        self.v_cases.set("many")
         self._apply_way()
         self._auto_dirs = ("", "")
         self.v_output.set(str(base / "anonymised"))

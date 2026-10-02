@@ -28,16 +28,21 @@ THE DEMO
 
 TAB 1  ANONYMISE: FOUR STEPS
   Step 1  Open your scans
-    Choose the folder that holds the scans: one patient or a whole cohort. Every sub-folder is searched and only
-    headers are read; nothing in the folder is changed. The list shows each patient found, the Patient ID inside
+    First say what you are anonymising: One patient, or Several patients. Nothing else is shown until you do.
+      One patient        choose that patient's folder; on the last step you type one new ID. If the folder turns
+                         out to hold more than one patient the app stops and says so: it is nearly always the
+                         wrong folder. "Switch to several patients" carries on with all of them.
+      Several patients   choose the folder that holds all the patients; they are numbered for you on the last step.
+    Every sub-folder is searched and only headers are read; nothing in the folder is changed. The list shows each patient found, the Patient ID inside
     the scans, and whether a coronary CT series was recognised.
       One folder per patient (or per study)   each gets its own new ID. Two scans of the same patient in separate
                                               folders are two studies with an ID each.
       Several patients mixed in one folder    recognised by the Patient ID inside the scans instead of by folder.
       A folder this app wrote earlier         skipped, so an old output is never anonymised twice.
-    "I already have a patient list (CSV) or an ID spreadsheet" shows the list-driven methods instead: a CSV of
-    source_folder, study_id; or one folder of patients plus a spreadsheet of old ID, new ID; or one patient with a
-    typed ID. Those keep their rarely needed options: drive path fix, already-analysed series, spreadsheet columns.
+    Under Several patients, "I already have a patient list (CSV) or an ID spreadsheet" shows the list-driven methods instead: a CSV of
+    source_folder, study_id; or one folder of patients plus a spreadsheet of old ID, new ID. Those keep their rarely
+    needed options: drive path fix, already-analysed series, spreadsheet columns. A single patient needs no list:
+    choose that patient's folder.
 
   Step 2  Which scans do you want?
       Coronary CT only   the thin contrast coronary reconstructions (0.8 mm or thinner, 100 images or more, cardiac

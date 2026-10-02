@@ -59,8 +59,10 @@ The tabs are numbered in the order you use them. The **Dark / Light** button in 
 Four steps, one screen each. **Next** becomes available when a step is complete, and a line under the steps says
 what is still missing.
 
-**Step 1: Open your scans.** Press **Choose folder** and pick the folder that holds the scans: one patient or a
-whole cohort. Every sub-folder is searched. Only headers are read and nothing in the folder is changed. The list
+**Step 1: Open your scans.** First answer one question: **One patient** or **Several patients**. Nothing else is
+shown until you do. Then choose the folder: that patient's folder, or the folder that holds all the patients.
+If you said one patient and the folder holds more, the app stops and says so, because that is nearly always the
+wrong folder; **Switch to several patients** carries on with all of them. Every sub-folder is searched. Only headers are read and nothing in the folder is changed. The list
 shows each patient found, the Patient ID inside the scans and whether a coronary CT series was recognised.
 
 | The folder holds | What happens |
@@ -69,13 +71,12 @@ shows each patient found, the Patient ID inside the scans and whether a coronary
 | Several patients' files mixed in one folder | They are told apart by the Patient ID inside the scans. |
 | An earlier output of this app | Skipped, so nothing is anonymised twice. |
 
-If you already have a patient-list CSV or an ID spreadsheet, tick **I already have a patient list (CSV) or an ID
-spreadsheet** to use the list-driven methods instead:
+If you already have a patient-list CSV or an ID spreadsheet, choose **Several patients** and tick **I already have a
+patient list (CSV) or an ID spreadsheet** to use the list-driven methods instead (a single patient needs no list: choose that patient's folder):
 
 | Choose | When |
 |---|---|
 | **A list of patients (CSV)** | A CSV with two columns, `source_folder` and `study_id`. Folders can be on different drives. |
-| **One patient** | A single folder and a typed ID. |
 | **A folder of patients + an ID spreadsheet** | One folder with a sub-folder per patient and a CSV or Excel sheet with an old-ID column and a new-ID column. |
 
 **Step 2: Which scans do you want?**

@@ -44,12 +44,18 @@ for tab, name in ((app.tab_home, "home"), (app.tab_series, "series"), (app.tab_v
     if r: report.append(f"[main/{name}]"); report += r
 app.nb.select(app.tab_run)
 N_STEPS = len(app.steps)
-for step in range(N_STEPS):
-    app._show_step(step); app.update(); r = clipped(app)
-    if r: report.append(f"[main/run folder-first empty step={step+1}]"); report += r
+for cases in ("", "one", "many"):
+    app.v_cases.set(cases); app._apply_way()
+    for step in range(N_STEPS):
+        app._show_step(step); app.update(); r = clipped(app)
+        if r: report.append(f"[main/run folder-first empty cases={cases or 'unanswered'} step={step+1}]"); report += r
+app.v_cases.set("one"); app._apply_way()
 from scrubdicom import demo_data
 demo_data.main(S / "demo_scans")
 app._open_folder(str(S / "demo_scans"), wait=True)
+app._show_step(0); app.update(); r = clipped(app)          # "one patient" but two found: the warning and the switch button
+if r: report.append("[main/run one-patient mismatch]"); report += r
+app._switch_to_many()
 for choice in ("coronary", "choose"):
     app.v_choice.set(choice); app._choice_changed()
     for strip in ("default", "custom"):
