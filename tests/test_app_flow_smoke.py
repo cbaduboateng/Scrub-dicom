@@ -3,6 +3,7 @@ choose what to keep, rename, and check the engine command the window builds. Ski
 import gc
 import time
 import tkinter as tk
+from tkinter import ttk
 from pathlib import Path
 
 import pytest
@@ -227,7 +228,7 @@ def test_the_confirmation_is_a_few_plain_rows(app, scans):
     app._strip_changed()
     # a real run asks; the answer decides
     asked = []
-    app._confirm_run = lambda: asked.append(1) or False
+    app._confirm_run = lambda earlier=None: (asked.append(1) or False, False)
     app.v_choice.set("coronary")
     app._choice_changed()
     app._start_run()
@@ -277,6 +278,66 @@ def test_start_again_clears_the_form_and_touches_nothing_on_disk(app, scans):
     # the same folder opens cleanly afterwards
     app._open_folder(str(scans), wait=True)
     assert len(app.intake.units) == 2 and [u.new_id for u in app.intake.units] == ["ANON-001", "ANON-002"]
+
+
+def test_renaming_an_anonymised_scan_replaces_the_earlier_copy_and_the_viewer_shows_the_new_one(app, scans, monkeypatch):
+    """The report: 'changed the name, but the image still shows the old ID'. The engine was right; the app had left the
+    earlier copy beside the new one and opened the viewer on it."""
+    import pydicom
+    from scrubdicom.app import ui
+    app._notify = lambda m: None
+    app.v_cases.set("one")
+    app._apply_way()
+    app._open_folder(str(scans / "SMITH_JOHN_1234567"), wait=True)
+    app._goto_step(SAVE_STEP)
+    assert app.v_one_id.get() == "ANON-001"
+    answers = {"ok": True, "replace": False}
+    seen = []
+    def fake_confirm(earlier=None):
+        seen.append(list(earlier or []))
+        return answers["ok"], answers["replace"]
+    app._confirm_run = fake_confirm
+    app._start_run()
+    assert pump(app, 120, lambda: not app.job and not (app.proc and app.proc.running) and app.step == DONE_STEP)
+    out = app._out()
+    assert sorted(p.name for p in out.iterdir() if p.is_dir() and not p.name.startswith("_")) == ["ANON-001"] and seen == [[]]
+    # the user types a new name and runs again, keeping the earlier copy: both are there, the Done screen says so,
+    # and 'View the scans' opens on the new one
+    app._goto_step(SAVE_STEP)
+    app.v_one_id.set("NEW NAME 7")
+    app._start_run()
+    assert pump(app, 120, lambda: not app.job and not (app.proc and app.proc.running) and app.step == DONE_STEP)
+    assert [(u.new_id, old) for u, old in seen[1]] == [("NEW NAME 7", "ANON-001")], "the confirmation was told about the earlier copy"
+    assert sorted(p.name for p in out.iterdir() if p.is_dir() and not p.name.startswith("_")) == ["ANON-001", "NEW_NAME_7"]
+    ds = pydicom.dcmread(str(next((out / "NEW_NAME_7").rglob("*.dcm"))), stop_before_pixels=True)
+    assert ds.PatientID == "NEW NAME 7" and str(ds.PatientName) == "NEW NAME 7"
+    assert app._first_output_id() == "NEW_NAME_7"
+    texts = [w.cget("text") for row in app.f_issues.winfo_children() for w in row.winfo_children() if isinstance(w, ttk.Label)]
+    assert any("also holds 1 from earlier runs (ANON-001)" in t for t in texts)
+    heading, rows = app._confirm_rows()
+    assert ("New ID", "NEW NAME 7", "") in rows
+    w = ui.open_viewer(app, "output", app._first_output_id())
+    assert pump(w, 20, lambda: bool(w.series)) and w.v_patient.get() == "NEW_NAME_7"
+    assert w.canvas.find_all()
+    labels = " ".join(str(w.canvas.itemcget(i, "text")) for i in w.canvas.find_all() if w.canvas.type(i) == "text")
+    assert "ANONYMISED  NEW_NAME_7" in labels, labels
+    w.destroy()
+    # and a third run that replaces: only the new ID remains, and the output still verifies
+    app._goto_step(SAVE_STEP)
+    app.v_one_id.set("FINAL 9")
+    answers["replace"] = True
+    app._start_run()
+    assert pump(app, 120, lambda: not app.job and not (app.proc and app.proc.running) and app.step == DONE_STEP)
+    assert [(u.new_id, old) for u, old in seen[2]] == [("FINAL 9", "NEW NAME 7")]
+    assert sorted(p.name for p in out.iterdir() if p.is_dir() and not p.name.startswith("_")) == ["ANON-001", "FINAL_9"], "only the copy under the old ID of THIS scan goes"
+    assert app.v_strip.get() == "Verified. Safe to hand over."
+    assert sum(1 for _ in (scans / "SMITH_JOHN_1234567").rglob("*.dcm")) == 139, "the original scan is untouched"
+    # the source view labels the original for what it is
+    w = ui.open_viewer(app, "source")
+    assert pump(w, 20, lambda: bool(w.series))
+    labels = " ".join(str(w.canvas.itemcget(i, "text")) for i in w.canvas.find_all() if w.canvas.type(i) == "text")
+    assert "ORIGINAL SCAN, will become FINAL 9" in labels, labels
+    w.destroy()
 
 
 def test_output_inside_the_scans_is_refused(app, scans):

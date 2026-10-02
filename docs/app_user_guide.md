@@ -185,6 +185,12 @@ While a run is going, the line under the bar says which patient, how many files,
 long run ends with a desktop notification on macOS, and the bell everywhere. **Activity log** (bottom right) shows
 the engine's own line-by-line output; it is hidden unless you ask for it.
 
+**The same scan again under a new name.** The confirmation says "ANON-001 is an earlier copy of this scan" and
+offers, ticked, to remove that copy from the output first so only the new ID remains. Untick it to keep both. The
+Done screen says when the folder also holds studies from earlier runs, and **View the scans** opens on the one just
+anonymised. In the viewer, the before side is labelled "ORIGINAL SCAN, will become X" and the after side
+"ANONYMISED X".
+
 **Start again.** The button at the bottom of every step clears the folder, the choices, the new IDs and the two
 destinations and returns to the first question. It asks first only if you typed IDs or ticked series by hand.
 Nothing on disk is deleted or changed.

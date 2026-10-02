@@ -109,6 +109,11 @@ THE ANONYMISE TAB: FIVE STEPS
     each with what it became. The same card on step 3 updates as you tick what to keep.
     "Open a different output folder" shows the results of an earlier run.
 
+  The same scan again under a new name
+    The confirmation says "X is an earlier copy of this scan" and offers to remove that copy from the output first,
+    so only the new ID remains. Untick it to keep both. The Done screen says when the folder also holds studies
+    from earlier runs; "View the scans" opens on the one just anonymised.
+
   Start again
     The button at the bottom of every step clears the folder, the choices, the new IDs and the two destinations and
     returns to the first question. Nothing on disk is deleted or changed; an output already written stays where it is.

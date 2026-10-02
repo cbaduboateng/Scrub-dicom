@@ -177,8 +177,10 @@ class ConfirmRun(tk.Toplevel):
     """'Ready to anonymise?': one fact per row, room between them, two buttons. Replaces a system message box that
     ran five lines and two long folder paths together."""
 
-    def __init__(self, parent, heading: str, rows: list[tuple[str, str, str]], note: str = "", ok_text: str = "Anonymise"):
+    def __init__(self, parent, heading: str, rows: list[tuple[str, str, str]], note: str = "", ok_text: str = "Anonymise",
+                 option: str = "", option_on: bool = True):
         super().__init__(parent)
+        self.v_option = tk.BooleanVar(value=option_on and bool(option))
         self.title(APP_NAME)
         self.transient(parent)
         self.resizable(False, False)
@@ -195,6 +197,10 @@ class ConfirmRun(tk.Toplevel):
                 Tooltip(v, tip)
             self.rows.append((label, value))
         n = len(rows) + 1
+        if option:
+            self.cb_option = ttk.Checkbutton(f, text=option, variable=self.v_option)
+            self.cb_option.grid(row=n, column=0, columnspan=2, sticky="w", pady=(14, 0))
+            n += 1
         if note:
             ttk.Label(f, text=note, style="Muted.TLabel", wraplength=540, justify="left").grid(row=n, column=0, columnspan=2, sticky="w", pady=(14, 0))
         b = ttk.Frame(f)
@@ -862,7 +868,7 @@ class App(tk.Tk):
         ttk.Label(ht, textvariable=self.v_done_detail, style="Muted.TLabel", wraplength=WRAP - 100, justify="left").pack(anchor="w", pady=(2, 0))
         dact = ttk.Frame(s5)
         dact.grid(row=2, column=0, columnspan=5, sticky="w", pady=(12, 0))
-        self.b_done_view = ttk.Button(dact, text="View the scans", style=accent, command=lambda: self._viewer("output"))
+        self.b_done_view = ttk.Button(dact, text="View the scans", style=accent, command=lambda: self._viewer("output", self._first_output_id()))
         self.b_done_open = ttk.Button(dact, text="Open the folder", command=lambda: self._open(self._out()))
         self.b_done_hand = ttk.Button(dact, text="Hand over", command=self._handover)
         self.b_done_cert = ttk.Button(dact, text="Certificate (PDF)", command=self._open_certificate)
@@ -1078,6 +1084,12 @@ class App(tk.Tk):
         self.card_done.show(f"What was removed, shown on {new_id}", changes, more)
         self.card_done.grid()
 
+    def _first_output_id(self) -> str | None:
+        """The output folder name of this run's first study, so the viewer opens on what was just anonymised."""
+        if self.v_way.get() == "folder" and self.intake and self.intake.units:
+            return intake.safe_name(self.intake.units[0].new_id)
+        return None
+
     def _refresh_done(self) -> None:
         if not hasattr(self, "cv_done"):
             return
@@ -1113,7 +1125,16 @@ class App(tk.Tk):
             w.destroy()
         actions = {"review": ("Look at them", lambda: self._viewer("output")), "move_logs": ("Move them out...", self._move_logs),
                    "verify": ("Check now", self._start_verify), "report": ("Open the report", lambda: self._show_details("verify"))}
-        for i, issue in enumerate(st.issues):
+        issues = list(st.issues)
+        out = self._out()
+        if self.v_way.get() == "folder" and self.intake and out and out.is_dir() and st.level != "none":
+            mine = {intake.safe_name(u.new_id) for u in self.intake.units}
+            done, partial = model.study_state(out)
+            others = sorted(x for x in done + partial if x not in mine)
+            if others:
+                issues.append(model.Issue(f"This folder also holds {len(others)} from earlier runs ({', '.join(others[:4])}{', ...' if len(others) > 4 else ''}). "
+                                          "The counts above include them.", ""))
+        for i, issue in enumerate(issues):
             row = ttk.Frame(self.f_issues)
             row.grid(row=i, column=0, sticky="w", pady=2)
             mark = tk.Canvas(row, width=18, height=18, highlightthickness=0, bg=brand._parent_bg(row))
@@ -2186,25 +2207,55 @@ class App(tk.Tk):
             self.v_show_log.set(True)
             self._toggle_log()
 
+    def _earlier_copies(self) -> list[tuple[intake.Unit, str]]:
+        """Studies of this run that are already in the output under a different ID: the same scan anonymised before,
+        then renamed. Read before the lists are rewritten, which would forget the earlier ID."""
+        it, conf, out = self.intake, self.v_confidential.get().strip(), self._out()
+        if self.v_way.get() != "folder" or not it or not conf or not out or not out.is_dir():
+            return []
+        existing = intake.read_patient_list(conf, it.mixed)
+        found = []
+        for u in it.units:
+            old = existing.get(intake.match_key(it, u), "")
+            if old and intake.safe_name(old) != intake.safe_name(u.new_id) and (out / intake.safe_name(old)).is_dir():
+                found.append((u, old))
+        return found
+
+    def _remove_earlier(self, earlier: list[tuple[intake.Unit, str]]) -> None:
+        """Delete the earlier copies from the OUTPUT folder (never the originals), so the renamed run replaces them."""
+        out = self._out()
+        for _u, old in earlier:
+            for d in (out / intake.safe_name(old), out / "_review" / intake.safe_name(old)):
+                if d.is_dir():
+                    shutil.rmtree(d, ignore_errors=True)
+            self._append_log(f"removed the earlier copy {old} from the output; it is replaced by this run", "warn")
+
     def _start_run(self, dry_run: bool = False) -> None:
         folder = self.v_way.get() == "folder"
+        earlier: list = []
         if folder:
             problems = [p for s in self._problems_by_step() for p in s]
             if problems:
                 messagebox.showerror("Cannot start", "\n".join(problems))
                 return
-            if not self._materialise():
+            earlier = self._earlier_copies() if not dry_run else []
+        replace = False
+        if not dry_run and self.demo_stage is None:
+            if not folder and self.previewed_key != self._spec_key():
+                messagebox.showinfo("Preview first", "Run Preview first. It writes nothing and shows what would happen, so a wrong folder is caught before anything is written.")
                 return
+            ok, replace = self._confirm_run(earlier)
+            if not ok:
+                return
+        if folder and not self._materialise():
+            return
         spec = self._spec(dry_run)
         problems = spec.validate()
         if problems:
             messagebox.showerror("Cannot start", "\n".join(problems))
             return
-        if not dry_run and not folder and self.previewed_key != self._spec_key():
-            messagebox.showinfo("Preview first", "Run Preview first. It writes nothing and shows what would happen, so a wrong folder is caught before anything is written.")
-            return
-        if not dry_run and self.demo_stage is None and not self._confirm_run():
-            return
+        if earlier and replace:
+            self._remove_earlier(earlier)
         self._start_job("dry" if dry_run else "run", ["run", *spec.run_args()], None if dry_run else "run", "Preview" if dry_run else "Anonymisation")
 
     def _confirm_rows(self) -> tuple[str, list[tuple[str, str, str]]]:
@@ -2232,14 +2283,28 @@ class App(tk.Tk):
             else:
                 heading = "Anonymise the patients in this folder?"
                 rows = [("From", short_path(s.input), s.input), ("New IDs from", short_path(s.mapping), s.mapping)]
-        rows += [("Removing", removing, ""),
-                 ("Copies go to", short_path(s.output), s.output),
+        rows += [("Removing", removing, "")]
+        if self.v_way.get() == "folder" and self.intake and len(self.intake.units) == 1:
+            rows.append(("New ID", self.intake.units[0].new_id.strip(), ""))
+        rows += [("Copies go to", short_path(s.output), s.output),
                  ("The key goes to", short_path(s.confidential), s.confidential)]
         return heading, rows
 
-    def _confirm_run(self) -> bool:
+    def _confirm_run(self, earlier: list | None = None) -> tuple[bool, bool]:
+        """(go ahead, replace the earlier copies). Earlier copies are the same scans already in the output under
+        another ID: the window says so, and offers to remove them first so the output does not hold both."""
         heading, rows = self._confirm_rows()
-        return ConfirmRun(self, heading, rows, "Your original scans are not changed.").wait()
+        option = ""
+        earlier = earlier or []
+        if earlier:
+            olds = ", ".join(old for _u, old in earlier[:5]) + (" ..." if len(earlier) > 5 else "")
+            rows.append(("Already there", (f"{olds} is an earlier copy of this scan, under its old ID" if len(earlier) == 1
+                                           else f"{len(earlier)} of these scans are already in the output under old IDs: {olds}"), ""))
+            option = ("Remove the earlier copy from the output first, so only the new ID remains" if len(earlier) == 1
+                      else f"Remove the {len(earlier)} earlier copies from the output first, so only the new IDs remain")
+        win = ConfirmRun(self, heading, rows, "Your original scans are not changed.", option=option)
+        ok = win.wait()
+        return ok, bool(option) and win.v_option.get()
 
     def _start_verify(self) -> None:
         out = self._out()

@@ -32,7 +32,7 @@ MONO = ("Menlo", 11) if sys.platform == "darwin" else ("Consolas", 10)
 SMALL = ("Menlo", 10) if sys.platform == "darwin" else ("Consolas", 9)
 COLOURS = {"keep": "#1a7f37", "maybe": "#9a6700", "drop": "#6e7781", "review": "#b42318",
            "removed": "#b42318", "changed": "#9a6700", "added": "#1a7f37", "kept": None, "override": "#0b5fff"}
-MODES = ("Original scans (preview what Anonymise will do)", "Anonymised output (check, redact, release)")
+MODES = ("Original scans: BEFORE, with what each will become", "Anonymised output: AFTER")
 ANNOT = "#e8d44d"
 ZOOMS = (0.5, 0.75, 1.0, 1.5, 2.0, 3.0, 4.0, 6.0, 8.0)
 
@@ -632,7 +632,8 @@ class ViewerWindow(tk.Toplevel):
         s = self.cur
         if not s:
             return
-        tl = f"{self._study_id()}\nS{s.number}  {s.description[:40]}\n{s.modality}  {s.n_images} images"
+        who = f"ORIGINAL SCAN, will become {self._study_id()}" if self.source_mode else f"ANONYMISED  {self._study_id()}"
+        tl = f"{who}\nS{s.number}  {s.description[:40]}\n{s.modality}  {s.n_images} images"
         tr = f"{self.v_orient.get()}  {self.idx + 1} / {self._n_slices()}\nzoom {self.zoom * 100:.0f}%"
         bl = f"WL {wc:.0f} / WW {ww:.0f}" + ("  inverted" if self.v_invert.get() else "")
         br = "  ".join(x for x in ((f"{s.kvp} kV" if s.kvp else ""), (f"{s.mas} mAs" if s.mas else ""), (f"CTDIvol {s.ctdi}" if s.ctdi else "")) if x)

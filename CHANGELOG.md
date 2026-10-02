@@ -41,6 +41,12 @@ Folder-first flow, after a live demo showed the first screen asked for lists and
   folder (16,000 studies would otherwise hold over a gigabyte of them), cohort totals are worked out once per change
   instead of several times per click, and the table of new IDs is rebuilt only while it is on screen. Timed on a
   simulated 16,000-study cohort: every click under a third of a second.
+- **Renaming a scan that was already anonymised.** Found in a real run: the user changed the name and ran again, and
+  the image still showed the old ID. The files were right; the app had left the earlier copy beside the new one,
+  counted both, and opened the viewer on the earlier one. Now the confirmation says "ANON-001 is an earlier copy of
+  this scan" with a ticked option to remove it from the output first; the Done screen says when the folder also
+  holds studies from earlier runs; "View the scans" opens on what was just anonymised; and the viewer's corner label
+  reads "ORIGINAL SCAN, will become X" on the before side and "ANONYMISED X" on the after side.
 - **Start again.** A button at the bottom of every step (and File > Start again) clears the folder, the choices,
   the new IDs and the destinations and returns to the first question. It asks first only when IDs were typed or
   series ticked by hand. Nothing on disk is deleted or changed.
