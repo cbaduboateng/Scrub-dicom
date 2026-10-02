@@ -52,6 +52,9 @@ THE ANONYMISE TAB: FIVE STEPS
                          angiography, reports) are still set aside in _review for a look.
       Let me choose      tick the kinds of series to keep. A "kind" is the same modality, description and slice
                          thickness across the patients, so one tick applies to the whole cohort.
+      Find               type part of a name, a type or a slice thickness ("cta", "pulm", "ct 1 mm"); every word
+                         must match. "Tick shown" and "Untick shown" then act on what was found, so the many
+                         names one kind of scan has across hospitals are ticked together.
     The line under the list says what would be kept. "Look at the images" opens the viewer, where the series of one
     patient can be ticked by hand; that patient's ticks then win over the choice here.
 

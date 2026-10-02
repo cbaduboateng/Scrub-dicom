@@ -94,6 +94,23 @@ def test_two_studies_of_one_patient_in_their_own_folders_get_an_id_each(demo, tm
     assert "2 studies from 1 patients" in it.headline() or "2 studies" in it.headline()
 
 
+def test_a_series_split_over_two_top_level_folders_is_counted_as_one(demo, tmp_path):
+    """Headers are let go folder by folder to keep memory flat on a big cohort. A series that carries on in a second
+    top-level folder must still be summed and judged as a whole: 60 + 60 slices is a coronary series, 60 is not."""
+    d, _ = demo
+    files = sorted((d / "SMITH_JOHN_1234567" / "S005_CorCTA").glob("*.dcm"))
+    root = tmp_path / "split"
+    for k, f in enumerate(files):
+        dest = root / ("part1" if k < 60 else "part2") / f.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(f, dest)
+    it = intake.scan_folder(root)
+    assert len(it.units) == 1 and it.units[0].folder == root and len(it.units[0].series) == 1
+    s = it.units[0].series[0]
+    assert (s.n_images, s.verdict) == (demo_data.CTA_SLICES, "keep"), s.reason
+    assert it.units[0].study_date == "20190522"
+
+
 def test_patients_sharing_one_folder_fall_back_to_patient_id(demo, tmp_path):
     d, _ = demo
     flat = tmp_path / "dump"
@@ -130,6 +147,18 @@ def test_kinds_and_default_ticks(demo):
     us = next(k for k in kinds if k.modality == "US")
     assert us.n_units == 1
     assert next(k for k in kinds if k.description.startswith("CaScore")).slice_text == "3 mm"
+
+
+def test_kinds_are_described_for_what_they_are_and_can_be_searched(demo):
+    kinds = intake.series_kinds(intake.scan_folder(demo[0]))
+    by = {k.description.split()[0]: k for k in kinds if k.description}
+    assert by["CaScore"].note == "16 images each" and by["CaScore"].per_study == 16, "not 'why the coronary rule passes it over'"
+    assert by["Topogram"].note == "scout or reformat" and by["CorCTA"].note == "coronary CT"
+    find = lambda q: sorted(k.description.split()[0] for k in kinds if k.matches(q) and k.description)
+    assert find("cta") == ["CorCTA"] and find("CASCORE") == ["CaScore"], "any case"
+    assert find("ct 0.6") == ["CorCTA", "Topogram"] and find("ct 0.6mm cor") == ["CorCTA"], "every word must match; '0.6 mm' or '0.6mm'"
+    assert find("held back") == ["Chest", "Echo"] and find("us") == ["Echo"]
+    assert len([k for k in kinds if k.matches("")]) == len(kinds) and find("nothing like this") == []
 
 
 def test_plan_for_each_choice(demo):

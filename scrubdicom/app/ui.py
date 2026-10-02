@@ -336,6 +336,8 @@ class App(tk.Tk):
         self.kind_thumbs: dict[tuple, tk.PhotoImage] = {}
         self._thumb_queue: list = []
         self._card_key: tuple | None = None
+        self._ids_version = 0                         # bumped whenever a new ID changes, so cached totals know to refresh
+        self._memo: dict = {}
         self.title(f"{APP_NAME} {APP_VERSION}")
         self.minsize(1040, 800)
         geo = self.settings.get("geometry")
@@ -415,6 +417,8 @@ class App(tk.Tk):
         self.v_found_notes = tk.StringVar(value="")
         self.v_choice = tk.StringVar(value="coronary" if self.v_ctca.get() else "all")
         self.v_plan = tk.StringVar(value="")
+        self.v_kind_query = tk.StringVar(value="")           # the search over the kinds of series on step 2
+        self.v_kind_shown = tk.StringVar(value="")
         self.v_strip_choice = tk.StringVar(value="saved" if self.v_profile.get().strip() else "default")
         self.v_keep = {k: tk.BooleanVar(value=False) for k, _, _ in KEEP_OPTIONS}
         self.v_prefix = tk.StringVar(value="ANON")
@@ -706,8 +710,20 @@ class App(tk.Tk):
         fk = self.f_kinds = ttk.Frame(s2)
         fk.grid(row=2, column=0, columnspan=5, sticky="nsew", pady=(8, 0))
         fk.columnconfigure(0, weight=1)
+        # a cohort from several hospitals names the same series many ways: find them by a word, tick what is shown
+        find = ttk.Frame(fk)
+        find.grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        ttk.Label(find, text="Find").pack(side="left")
+        e_find = ttk.Entry(find, textvariable=self.v_kind_query, width=26)
+        e_find.pack(side="left", padx=(8, 0))
+        e_find.bind("<Escape>", lambda _e: self.v_kind_query.set(""))
+        Tooltip(e_find, "Type part of a series name, a type or a slice thickness: 'cta', 'pulm', 'ct 1 mm', 'calcium'. Every word must match.")
+        self.b_find_clear = ttk.Button(find, text="Show all", command=lambda: self.v_kind_query.set(""))
+        self.b_find_clear.pack(side="left", padx=(8, 0))
+        ttk.Label(find, textvariable=self.v_kind_shown, style="Muted.TLabel").pack(side="left", padx=(12, 0))
+        self.v_kind_query.trace_add("write", lambda *_: self._fill_kinds())
         kc = ttk.Frame(fk)
-        kc.grid(row=0, column=0, sticky="nsew")
+        kc.grid(row=1, column=0, sticky="nsew")
         kc.columnconfigure(0, weight=1)
         kc.rowconfigure(0, weight=1)
         self.tv_kinds = self._tree(kc, [("use", "Keep", 50), ("mod", "Type", 55), ("desc", "Series", 270), ("slice", "Slice", 70), ("in", "Found in", 100),
@@ -718,16 +734,16 @@ class App(tk.Tk):
         self.tv_kinds.column("#0", width=THUMB + 22, minwidth=THUMB + 22, stretch=False, anchor="center")
         self.tv_kinds.heading("#0", text="")
         self.tv_kinds.bind("<ButtonRelease-1>", self._kind_click)
-        fk.rowconfigure(0, weight=1)
+        fk.rowconfigure(1, weight=1)
         s2.rowconfigure(2, weight=1)
         krow = ttk.Frame(fk)
-        krow.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        krow.grid(row=2, column=0, sticky="ew", pady=(6, 0))
         ttk.Label(krow, textvariable=self.v_plan, style="H2.TLabel").pack(side="left")
         self.b_look = ttk.Button(krow, text="Look at the images...", command=lambda: self._viewer("source"))
         self.b_look.pack(side="right")
-        self.b_tick_none = ttk.Button(krow, text="Untick all", command=lambda: self._tick_all(False))
+        self.b_tick_none = ttk.Button(krow, text="Untick shown", command=lambda: self._tick_all(False))
         self.b_tick_none.pack(side="right", padx=(0, 8))
-        self.b_tick_all = ttk.Button(krow, text="Tick all", command=lambda: self._tick_all(True))
+        self.b_tick_all = ttk.Button(krow, text="Tick shown", command=lambda: self._tick_all(True))
         self.b_tick_all.pack(side="right", padx=(0, 8))
         self.lbl_list_series = ttk.Label(s2, text="With a patient list the choice applies to every patient. To tick series for one patient, open the viewer on the last step.",
                                          style="Muted.TLabel", wraplength=WRAP, justify="left")
@@ -1180,7 +1196,7 @@ class App(tk.Tk):
     def _switch_to_many(self) -> None:
         self.v_cases.set("many")
         self._apply_way()
-        self._fill_ids()
+        self._fill_ids_if_showing()
         self._live_validate()
 
     def _scanning(self) -> bool:
@@ -1277,6 +1293,7 @@ class App(tk.Tk):
             self.v_choice.set("coronary" if any(k.coronary for k in self.kinds) and not self.rb_choice["coronary"].instate(["disabled"]) else "all")
         self.v_found_notes.set("  ".join(notes))
         self.kind_thumbs = {}
+        self.v_kind_query.set("")
         self._thumb_queue = [k for k in self.kinds if k.sample is not None]
         self._card_key = None
         self.after(30, self._thumb_tick)
@@ -1284,7 +1301,7 @@ class App(tk.Tk):
         self._assign_ids(force=True)
         self._fill_found()
         self._fill_kinds()
-        self._fill_ids()
+        self._fill_ids_if_showing()
         self._refresh_all()
         self._live_validate()
 
@@ -1306,8 +1323,32 @@ class App(tk.Tk):
         if self._thumb_queue:
             self.after(5, self._thumb_tick)
 
+    def _state_sig(self) -> tuple:
+        """A cheap fingerprint of everything the totals depend on: the folder, the choice, the ticks, the new IDs."""
+        return (id(self.intake), self.v_choice.get(), hash(frozenset(self.ticked)),
+                hash(frozenset((k, frozenset(v)) for k, v in self.overrides.items())), self._ids_version)
+
+    def _memoised(self, name: str, fn):
+        """Totals over a cohort are asked for several times per click; with thousands of studies, work them out once."""
+        sig = self._state_sig()
+        if self._memo.get("sig") != sig:
+            self._memo = {"sig": sig}
+        if name not in self._memo:
+            self._memo[name] = fn()
+        return self._memo[name]
+
     def _plan(self) -> intake.Plan:
-        return intake.plan(self.intake, self.v_choice.get(), self.ticked, self.overrides) if self.intake else intake.Plan(0, 0, 0, [])
+        if not self.intake:
+            return intake.Plan(0, 0, 0, [])
+        return self._memoised("plan", lambda: intake.plan(self.intake, self.v_choice.get(), self.ticked, self.overrides))
+
+    def _selection_rows(self) -> list:
+        return self._memoised("rows", lambda: intake.selection_rows(self.intake, self.v_choice.get(), self.ticked, self.overrides))
+
+    def _fill_ids_if_showing(self) -> None:
+        """The table of new IDs has a row per study; rebuild it only while it is on screen (it is filled on arrival)."""
+        if self.step == SAVE_STEP:
+            self._fill_ids()
 
     def _fill_found(self) -> None:
         tv = self.tv_found
@@ -1336,7 +1377,12 @@ class App(tk.Tk):
             self.v_plan.set("" if self.v_way.get() == "list" else "Open a folder on step 1 to see its series here.")
             return
         n = len(it.units)
+        query = self.v_kind_query.get().strip()
+        shown = 0
         for i, k in enumerate(self.kinds):
+            if query and not k.matches(query):
+                continue
+            shown += 1
             if choosing:
                 kept = k.key in self.ticked
                 mark = "\u2611" if kept else "\u2610"
@@ -1346,6 +1392,9 @@ class App(tk.Tk):
             tv.insert("", "end", iid=str(i), image=self.kind_thumbs.get(k.key, ""), values=(mark, k.modality, k.description or "(no description)", k.slice_text,
                                                                                           f"{k.n_units} of {n}", f"{k.n_images:,}", k.note), tags=(("keep",) if kept else ("drop",)))
         theme.tag_colours(tv, ("keep", "drop"))
+        total = len(self.kinds)
+        self.v_kind_shown.set((f"{shown} of {total} kinds shown" if query else f"{total} kinds of series") if total else "")
+        self.b_find_clear.state(["!disabled"] if query else ["disabled"])
         text = self._plan().text(n, it.noun(n))
         if self.overrides:
             text += f"  {len(self.overrides)} patient(s) have their own ticks from the viewer."
@@ -1362,19 +1411,25 @@ class App(tk.Tk):
         key = self.kinds[int(row)].key
         (self.ticked.discard if key in self.ticked else self.ticked.add)(key)
         self._fill_kinds()
-        self._fill_ids()
+        self._fill_ids_if_showing()
         self._live_validate()
 
+    def _shown_kinds(self) -> list:
+        query = self.v_kind_query.get().strip()
+        return [k for k in self.kinds if not query or k.matches(query)]
+
     def _tick_all(self, on: bool) -> None:
-        self.ticked = {k.key for k in self.kinds} if on else set()
+        """Tick or untick every kind that is showing: all of them, or just what the search found."""
+        keys = {k.key for k in self._shown_kinds()}
+        self.ticked = (self.ticked | keys) if on else (self.ticked - keys)
         self._fill_kinds()
-        self._fill_ids()
+        self._fill_ids_if_showing()
         self._live_validate()
 
     def _choice_changed(self) -> None:
         self.v_ctca.set(self.v_choice.get() == "coronary")
         self._fill_kinds()
-        self._fill_ids()
+        self._fill_ids_if_showing()
         self._live_validate()
 
     def _strip_changed(self) -> None:
@@ -1415,7 +1470,8 @@ class App(tk.Tk):
         # when renumbering would anonymise someone twice. A list that was never run does not pin anything.
         existing = {k: v for k, v in (intake.read_patient_list(conf, it.mixed) if conf else {}).items() if intake.safe_name(v) in taken}
         intake.assign_ids(it, self.v_prefix.get(), existing, taken)
-        self._fill_ids()
+        self._ids_version += 1
+        self._fill_ids_if_showing()
         self._schedule_validate()
 
     def _fill_ids(self) -> None:
@@ -1447,6 +1503,7 @@ class App(tk.Tk):
         if unit.new_id in self.overrides:
             self.overrides[new_id] = self.overrides.pop(unit.new_id)
         unit.new_id = new_id
+        self._ids_version += 1
         self._ids_edited = True
         self._schedule_validate()
 
@@ -1494,6 +1551,7 @@ class App(tk.Tk):
             messagebox.showerror(APP_NAME, f"That spreadsheet could not be read: {type(e).__name__}")
             return
         n = intake.apply_spreadsheet(it, mapping)
+        self._ids_version += 1
         self._ids_edited = True
         self._fill_ids()
         self._live_validate()
@@ -1514,7 +1572,7 @@ class App(tk.Tk):
         try:
             intake.run_list(conf, it)
             intake.write_patient_list(conf, it)
-            intake.write_selection(conf, intake.selection_rows(it, self.v_choice.get(), self.ticked, self.overrides))
+            intake.write_selection(conf, self._selection_rows())
         except OSError as e:
             messagebox.showerror(APP_NAME, f"Could not write to the confidential folder:\n{e}")
             return False
@@ -1524,7 +1582,7 @@ class App(tk.Tk):
         """Called by the viewer after 'Let the rule decide': that study follows the choice on step 2 again."""
         if self.overrides.pop(study_id, None) is not None:
             self._fill_kinds()
-            self._fill_ids()
+            self._fill_ids_if_showing()
             self._live_validate()
 
     # ------------------------------------------------------------------ tabs 2-4 with empty states
@@ -1780,7 +1838,7 @@ class App(tk.Tk):
             if not it or not it.units or not conf:
                 return JobSpec(mode="manifest", ctca_only=self.v_choice.get() == "coronary", **common)
             choice = self.v_choice.get()
-            sel = str(Path(conf).expanduser() / intake.SELECTION) if intake.selection_rows(it, choice, self.ticked, self.overrides) else ""
+            sel = str(Path(conf).expanduser() / intake.SELECTION) if self._selection_rows() else ""
             lst = str(Path(conf).expanduser() / ("this_run_" + (intake.PATIENT_ID_MAP if it.mixed else intake.PATIENT_LIST)))
             if it.mixed:
                 return JobSpec(mode="mapping", input=str(it.root), mapping=lst, match_on="patientid", series_select=sel, **common)
@@ -1795,8 +1853,7 @@ class App(tk.Tk):
         s = self._spec()
         sig: tuple = ()
         if self.v_way.get() == "folder" and self.intake:
-            sig = (str(self.intake.root), tuple(u.new_id for u in self.intake.units), self.v_choice.get(), tuple(sorted(map(str, self.ticked))),
-                   tuple(sorted((k, tuple(sorted(v))) for k, v in self.overrides.items())))
+            sig = (str(self.intake.root), *self._state_sig())
         return (self.v_way.get(), s.mode, s.manifest, s.input, s.study_id, s.mapping, s.output, s.confidential, s.profile, s.ctca_only, s.series_pick,
                 s.series_select, s.match_on, s.current_col, s.new_col, sig)
 

@@ -160,18 +160,43 @@ def scan_folder(root: Path | str, progress=None, cancelled=None) -> Intake:
         pid, study, series = _ids(h)
         rel = d.relative_to(root)
         gkey = pid or ("\0" + (rel.parts[0] if rel.parts else ""))     # no Patient ID: group by top-level sub-folder
-        r = recs.setdefault((gkey, study, series), {"head": h, "count": 0, "dirs": set(), "pid": pid, "sample": sample})
+        key = (gkey, study, series)
+        r = recs.get(key)
+        if r is None:
+            r = recs[key] = {"head": h, "count": 0, "dirs": set(), "pid": pid, "sample": sample, "fs": None, "date": str(h.get("StudyDate", "") or "")}
+        elif r["head"] is None:
+            r["head"], r["fs"] = h, None       # the series carries on in another top-level folder: sum it up again at the end
         if middle:
             r["sample"] = sample
         r["count"] += count
         r["dirs"].add(d)
         it.n_files += count
+        open_keys.add(key)
+
+    # A header is about 9 KB in memory and a cohort has eight or so series per study: 16,000 studies would hold over a
+    # gigabyte of them. So each top-level folder's series are summed up and their headers let go as soon as the walk
+    # leaves that folder.
+    open_keys: set = set()
+    current_top: list = [None]
+
+    def close_top() -> None:
+        for key in open_keys:
+            r = recs[key]
+            if r["head"] is not None:
+                r["fs"] = _found(r)
+                r["head"] = None
+        open_keys.clear()
 
     for dirpath, dirnames, filenames in os.walk(root):
         if cancelled and cancelled():
             it.cancelled = True
             break
         d = Path(dirpath)
+        rel_parts = d.relative_to(root).parts
+        top = rel_parts[0] if rel_parts else ""
+        if top != current_top[0]:
+            close_top()
+            current_top[0] = top
         if d != root and looks_like_output(d):
             it.notes.append(f"Skipped '{d.name}': it is an earlier anonymised output.")
             dirnames[:] = []
@@ -199,6 +224,7 @@ def scan_folder(root: Path | str, progress=None, cancelled=None) -> Intake:
                 progress(it.n_files, len(recs))
                 if cancelled and cancelled():
                     break
+    close_top()
     _build_units(it, recs)
     return it
 
@@ -213,16 +239,19 @@ def _nested(folders: list[Path]) -> bool:
     return any(b[:len(a)] == a for a, b in zip(parts, parts[1:]))
 
 
+def _found(r: dict) -> FoundSeries:
+    """One series, classified by the engine's own rule from its header and its file count."""
+    h, n = r["head"], r["count"]
+    frames = int(h.get("NumberOfFrames", 0) or 0)
+    thick = series_info(h)[0]
+    verdict, reason = classify_series(h, n)
+    return FoundSeries(uid=_ids(h)[2], number=str(h.get("SeriesNumber", "") or ""), description=str(h.get("SeriesDescription", "") or ""),
+                       modality=str(h.get("Modality", "") or ""), thickness=thick, n_images=max(n, frames if n == 1 else 0),
+                       verdict=verdict, reason=reason, review=is_review_object(h), sample=r.get("sample"))
+
+
 def _series_of(rows: list[dict]) -> list[FoundSeries]:
-    out = []
-    for r in rows:
-        h, n = r["head"], r["count"]
-        frames = int(h.get("NumberOfFrames", 0) or 0)
-        thick = series_info(h)[0]
-        verdict, reason = classify_series(h, n)
-        out.append(FoundSeries(uid=_ids(h)[2], number=str(h.get("SeriesNumber", "") or ""), description=str(h.get("SeriesDescription", "") or ""),
-                               modality=str(h.get("Modality", "") or ""), thickness=thick, n_images=max(n, frames if n == 1 else 0),
-                               verdict=verdict, reason=reason, review=is_review_object(h), sample=r.get("sample")))
+    out = [r["fs"] or _found(r) for r in rows]
     out.sort(key=lambda s: (float(s.number) if s.number.replace(".", "", 1).isdigit() else 1e9, s.description))
     return out
 
@@ -237,11 +266,11 @@ def _build_units(it: Intake, recs: dict) -> None:
         folders = {s: _common(set().union(*(r["dirs"] for r in rows))) for s, rows in studies.items()}
         if len(studies) > 1 and not _nested(list(folders.values())):
             for s, rows in studies.items():          # each study of this patient sits in its own folder: one ID each
-                units.append((gkey, Unit(key=pid, folder=folders[s], series=_series_of(rows), study_date=str(rows[0]["head"].get("StudyDate", "") or ""))))
+                units.append((gkey, Unit(key=pid, folder=folders[s], series=_series_of(rows), study_date=rows[0]["date"])))
         else:
             rows = [r for rs in studies.values() for r in rs]
             units.append((gkey, Unit(key=pid, folder=_common(set().union(*(r["dirs"] for r in rows))), series=_series_of(rows),
-                                     study_date=str(rows[0]["head"].get("StudyDate", "") or ""))))
+                                     study_date=rows[0]["date"])))
     if len(by_patient) > 1 and _nested([u.folder for _, u in units]):
         # several patients' files share a folder: a folder can no longer stand for a patient, so match on Patient ID
         it.mixed = True
@@ -290,7 +319,24 @@ class Kind:
             return "held back for a look: may carry burned-in text"
         if self.maybe:
             return "thin CT, no contrast noted in the header"
-        return self.reason.split(";")[0].strip() or "not a coronary series"
+        # everything else is described for what it is, not for why the coronary rule passes it over: most cohorts are not cardiac
+        if "localiser" in self.reason:
+            return "scout or reformat" + self._each
+        return (f"{self.per_study:,} images each" if self.per_study > 1 else "a single image") if self.n_units else ""
+
+    @property
+    def per_study(self) -> int:
+        return round(self.n_images / self.n_units) if self.n_units else 0
+
+    @property
+    def _each(self) -> str:
+        return f", {self.per_study:,} images each" if self.per_study > 1 else ""
+
+    def matches(self, query: str) -> bool:
+        """Every word of the search appears somewhere in the type, the series name, the slice thickness or the note.
+        'cta 1 mm' finds 1 mm CTA series; 'ct' alone finds everything CT."""
+        hay = f"{self.modality} {self.description} {self.slice_text} {self.slice_text.replace(' ', '')} {self.note}".lower()
+        return all(w in hay for w in query.lower().split())
 
     @property
     def slice_text(self) -> str:

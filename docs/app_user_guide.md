@@ -88,7 +88,9 @@ patient list (CSV) or an ID spreadsheet** to use the list-driven methods instead
 - **Everything**: every series is anonymised. Types that often carry burned-in text (X-ray, ultrasound,
   angiography, reports) are still set aside in `_review` for you to look at.
 - **Let me choose**: tick the kinds of series to keep. A kind is the same modality, description and slice thickness
-  across the patients, so one tick applies to the whole cohort.
+  across the patients, so one tick applies to the whole cohort. For a large or mixed cohort, type in **Find**
+  ("cta", "pulm", "ct 1 mm"; every word must match) and press **Tick shown**: the many names one kind of scan has
+  across hospitals are ticked together. "Coronary CT only" is a cardiac rule; a CTPA or other cohort uses this.
 
 The line under the list says what would be kept. **Look at the images** opens the viewer, where the series of one
 patient can be ticked by hand; that patient's own ticks then win over the choice on this step.

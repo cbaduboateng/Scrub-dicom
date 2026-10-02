@@ -120,9 +120,26 @@ def test_choosing_kinds_and_keeping_things(app, scans):
     assert app.ticked == {app.kinds[0].key} and "Keeps 2 series, 240 images" in app.v_plan.get()
     app._tick_all(False)
     assert app._problems_by_step()[1] and app.b_start.instate(["disabled"])
+    # the search: a word narrows the list, and 'Tick shown' ticks only what it found
+    app.v_kind_query.set("cascore")
+    assert len(app.tv_kinds.get_children("")) == 1 and app.v_kind_shown.get() == "1 of 6 kinds shown"
+    app._tick_all(True)
     ca = next(k for k in app.kinds if k.description.startswith("CaScore"))
-    app.ticked = {ca.key}
-    app._fill_kinds()
+    assert app.ticked == {ca.key}, "only the kind that was showing"
+    app.v_kind_query.set("")
+    assert len(app.tv_kinds.get_children("")) == 6 and app.v_kind_shown.get() == "6 kinds of series"
+    app.v_kind_query.set("ct")
+    app._tick_all(True)
+    assert len(app.ticked) == 3
+    app.v_kind_query.set("cascore")
+    row = app.tv_kinds.get_children("")[0]
+    assert app.kinds[int(row)].key == ca.key, "a row still knows which kind it is when the list is filtered"
+    app.v_kind_query.set("topogram")
+    app._tick_all(False)
+    app.v_kind_query.set("cta")
+    app._tick_all(False)
+    app.v_kind_query.set("")
+    assert app.ticked == {ca.key}
     app._live_validate()
     spec = app._spec()
     assert not spec.ctca_only and spec.series_select.endswith(intake.SELECTION)

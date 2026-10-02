@@ -33,6 +33,14 @@ Folder-first flow, after a live demo showed the first screen asked for lists and
   the record of what happened.
 - **Less engineering on screen.** The engine's log is behind an "Activity log" toggle; the progress line estimates
   the time left; a long run ends with a desktop notification (macOS, via the system's own osascript) or the bell.
+- **Find, then tick what is shown.** Step 2 has a search over the kinds of series ("cta", "pulm", "ct 1 mm"); "Tick
+  shown" and "Untick shown" act on what the search found. A cohort from several hospitals names the same series
+  many ways, and a cohort that is not cardiac cannot use "Coronary CT only". Series that are not coronary are now
+  described for what they are ("420 images each", "scout or reformat"), not for why the coronary rule passes them over.
+- **Ready for a large cohort.** The folder scan lets each top-level folder's headers go as soon as it has read that
+  folder (16,000 studies would otherwise hold over a gigabyte of them), cohort totals are worked out once per change
+  instead of several times per click, and the table of new IDs is rebuilt only while it is on screen. Timed on a
+  simulated 16,000-study cohort: every click under a third of a second.
 - **A confirmation you can read.** Pressing Anonymise opens a small window with a question as its heading and one
   fact per row (from, keeping, removing, where the copies go, where the key goes), with folder paths shortened and
   the full path in a tooltip. It replaces a system message box that ran five lines and two long paths together.
