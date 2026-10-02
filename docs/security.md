@@ -124,6 +124,15 @@ The software cannot do these for you.
 
 ## Supply chain and build integrity
 
+- Drag and drop uses the tkdnd Tcl extension, bundled by `tkinterdnd2` (MIT; pinned by hash like every other
+  dependency). It is a native library loaded into the window's own interpreter. It opens no sockets; the app reads
+  only the path of what was dropped. It is optional at run time: if it fails to load, the app runs without it.
+- The desktop notification at the end of a long run is the system's own `osascript` on macOS, called with a fixed
+  title and a message that names counts only. Quotes and backslashes are stripped from the message. Nothing else
+  is launched.
+- The certificate (PDF) is drawn with the standard library only. It contains new IDs and counts, never an original
+  identifier, and is covered by `tests/test_app_certificate.py`.
+
 - Runtime dependencies, pinned by SHA-256 in `packaging/requirements-build.lock` and audited with `pip-audit`
   before every build: `pydicom` (engine), `openpyxl`
   (`.xlsx` mapping files), and for the viewer `numpy` and `python-gdcm` (Apache-2.0; decodes JPEG 2000,

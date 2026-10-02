@@ -82,7 +82,7 @@ install the package if needed, audit finished studies, run, and verify.
 Download the `.dmg` (macOS) or the setup `.exe` / zip (Windows) from the release, or build it yourself with
 `packaging/build_macos.sh` / `packaging\build_windows.bat` (see [packaging/README.md](packaging/README.md)).
 The app is a plain window that wraps the same engine. Open a folder of scans; choose which series to keep (coronary
-CT only, everything, or tick the kinds you want); choose what to remove; save, watch progress, stop; review series decisions; run verify with your own needles; and a "Ready to share?"
+CT only, everything, or tick the kinds you want); choose what to remove; save, watch progress, stop; a results screen with a one-page PDF certificate for every verified output; review series decisions; run verify with your own needles; and a "Ready to share?"
 check that moves the confidential logs out of the output tree. A built-in DICOM viewer previews exactly what a run
 will do to each patient (series decisions, images, header before/after) and, afterwards, lets you redact burned-in
 text in quarantined files and release them. De-identification profiles let a study keep, for example, sex and a

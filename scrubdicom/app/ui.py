@@ -30,6 +30,7 @@ from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 from . import brand
 from . import certificate
+from . import dnd
 from . import intake
 from . import model
 from . import plain
@@ -90,8 +91,9 @@ HELP_QA = (
      "It holds the key that links each new ID to the real patient, together with the logs. Keep it yourself and never send it with the scans.\n\n"
      "Without it, nobody can work out who a scan belongs to."),
     ("How do I know it worked?",
-     "After anonymising, the app re-opens every output file and searches it for anything identifying. The coloured strip at the top turns green "
-     "and says 'Verified. Safe to hand over.'\n\nDo not share anything before it does."),
+     "After anonymising, the app re-opens every output file and searches it for anything identifying. The run ends on the Done step: "
+     "a green tick and 'anonymised and verified' means every file was found clean, and the strip at the top says 'Verified. Safe to hand over.'\n\n"
+     "Do not share anything before it does. 'Certificate (PDF)' gives you a one-page record to keep."),
     ("Some files were held back. Why?",
      "X-rays, ultrasound, screenshots and reports often have the patient's name burned into the picture itself. Those are set aside in a "
      "_review folder for you to look at. The viewer can black out the text and release them."),
@@ -209,9 +211,9 @@ class Tooltip:
 class ChangeCard(ttk.Frame):
     """What anonymising does to one example file, in ordinary words: 'Name   SMITH JOHN   DEMO-001'."""
 
-    def __init__(self, parent, columns: int = 1, wrap: int = 420, **kw):
+    def __init__(self, parent, columns: int = 1, wrap: int = 420, cut: tuple[int, int] = (22, 26), **kw):
         super().__init__(parent, padding=(14, 10, 14, 10), style=theme.style_or("Card.TFrame"), **kw)
-        self.columns, self.wrap = columns, wrap
+        self.columns, self.wrap, self.cut = columns, wrap, cut
         self.v_title, self.v_more = tk.StringVar(), tk.StringVar()
         ttk.Label(self, textvariable=self.v_title, style="H2.TLabel").grid(row=0, column=0, sticky="w")
         self.body = ttk.Frame(self)
@@ -238,9 +240,9 @@ class ChangeCard(ttk.Frame):
             col, row = (i // per_col) * 4, i % per_col
             ttk.Label(self.body, text=c.label, style="Muted.TLabel").grid(row=row, column=col, sticky="w", padx=((0 if col == 0 else 28), 10), pady=1)
             kept = c.state == "kept"
-            ttk.Label(self.body, text=self._cut(c.before, 22), font=("TkDefaultFont" if kept else self.struck)).grid(row=row, column=col + 1, sticky="w", padx=(0, 10))
+            ttk.Label(self.body, text=self._cut(c.before, self.cut[0]), font=("TkDefaultFont" if kept else self.struck)).grid(row=row, column=col + 1, sticky="w", padx=(0, 10))
             colour = {"removed": pal["muted"], "replaced": brand.TEAL_DARK, "kept": pal["warn"]}[c.state]
-            ttk.Label(self.body, text=self._cut(c.after, 26), foreground=colour, font=self.bold).grid(row=row, column=col + 2, sticky="w")
+            ttk.Label(self.body, text=self._cut(c.after, self.cut[1]), foreground=colour, font=self.bold).grid(row=row, column=col + 2, sticky="w")
 
     def message(self, title: str, text: str) -> None:
         self.show(title, [], text)
@@ -312,6 +314,8 @@ class App(tk.Tk):
         self.v_prefix.trace_add("write", lambda *_: self._assign_ids())
         self._refresh_all()
         self._watch_form()
+        self.dnd_ok = dnd.enable(self, self._dropped)      # a folder dropped anywhere on the window opens it
+        self._apply_way()
         self.after(POLL_MS, self._poll)
         if selftest:
             self.after(500, self._selftest_walk)
@@ -473,7 +477,7 @@ class App(tk.Tk):
         tiles = ttk.Frame(box)
         tiles.grid(row=1, column=0, sticky="ew", pady=(32, 0))
         tw = (COL - 32) // 3
-        for i, (title, sub, colour, cmd) in enumerate((("Open scans", "Choose a folder of DICOM to anonymise", brand.NAVY, self._home_open),
+        for i, (title, sub, colour, cmd) in enumerate((("Open scans", "Choose a folder of DICOM, or drop one here", brand.NAVY, self._home_open),
                                                        ("See the demo", "Two made-up patients, start to finish", brand.TEAL_DARK, self._run_demo),
                                                        ("Viewer", "Scans, headers, and what changes", brand.SLATE, lambda: self._viewer("source")))):
             brand.Tile(tiles, title, sub, colour, cmd, width=tw, height=124).grid(row=0, column=i, padx=(0 if i == 0 else 16, 0))
@@ -554,6 +558,7 @@ class App(tk.Tk):
         stack = ttk.Frame(t)
         stack.grid(row=1, column=0, sticky="nsew")
         stack.columnconfigure(0, weight=1)
+        stack.rowconfigure(0, weight=1)        # the steps share the spare height, so their tables grow with the window
         self.steps = [ttk.Frame(stack, padding=(8, 8, 8, 4)) for _ in STEP_TITLES]
         for i, s in enumerate(self.steps):
             s.grid(row=0, column=0, sticky="nsew")
@@ -687,13 +692,13 @@ class App(tk.Tk):
         body3.columnconfigure(1, weight=1)
         f3 = ttk.Frame(body3)
         f3.grid(row=0, column=0, sticky="nw")
-        self.card_remove = ChangeCard(body3, columns=1, wrap=380)
+        self.card_remove = ChangeCard(body3, columns=1, wrap=360, cut=(16, 19))
         self.card_remove.grid(row=0, column=1, sticky="ne", padx=(20, 0))
         ttk.Radiobutton(f3, text="Everything that identifies the patient, the hospital or the scanner", value="default", variable=self.v_strip_choice,
                         command=self._strip_changed).grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
         ttk.Label(f3, text="Recommended. This is what a blinded read needs.", style="Muted.TLabel").grid(row=1, column=0, columnspan=3, sticky="w", padx=(28, 0))
         ttk.Radiobutton(f3, text="Everything, except what I tick here", value="custom", variable=self.v_strip_choice,
-                        command=self._strip_changed).grid(row=2, column=0, columnspan=3, sticky="w", pady=(10, 2))
+                        command=self._strip_changed).grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 2))
         kf = ttk.Frame(f3)
         kf.grid(row=3, column=0, columnspan=3, sticky="w", padx=(28, 0))
         self.cb_keep = []
@@ -703,7 +708,7 @@ class App(tk.Tk):
             ttk.Label(kf, text=sub, style="Muted.TLabel").grid(row=i, column=1, sticky="w", padx=(14, 0))
             self.cb_keep.append(cb)
         ttk.Radiobutton(f3, text="Use a saved profile", value="saved", variable=self.v_strip_choice,
-                        command=self._strip_changed).grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 2))
+                        command=self._strip_changed).grid(row=4, column=0, columnspan=3, sticky="w", pady=(6, 2))
         prow = ttk.Frame(f3)
         prow.grid(row=5, column=0, columnspan=3, sticky="w", padx=(28, 0))
         self.cb_profile = ttk.Combobox(prow, textvariable=self.v_profile_label, state="readonly", width=34)
@@ -711,8 +716,7 @@ class App(tk.Tk):
         self.cb_profile.bind("<<ComboboxSelected>>", lambda _e: self._profile_chosen())
         self.b_edit_profiles = ttk.Button(prow, text="Edit...", command=self._edit_profiles)
         self.b_edit_profiles.pack(side="left", padx=(8, 0))
-        ttk.Label(f3, text="Always removed, whatever you choose: names, date of birth, hospital and NHS numbers, addresses, doctors' names, accession numbers, "
-                           "comments, private vendor tags and the original UIDs.", style="Muted.TLabel", wraplength=500, justify="left").grid(row=6, column=0, columnspan=3, sticky="w", pady=(14, 0))
+        # what is always removed is not repeated here: the card beside these options shows it on one of the user's own files
 
         # ---- step 4: new IDs, where to save, go
         s4 = self.steps[3]
@@ -740,7 +744,7 @@ class App(tk.Tk):
         ic.grid(row=1, column=0, sticky="nsew", pady=(6, 2))
         ic.columnconfigure(0, weight=1)
         ic.rowconfigure(0, weight=1)
-        self.tv_ids = self._tree(ic, [("folder", "Original", 380), ("new_id", "New ID", 200), ("keeps", "Keeps", 280)], height=4, xscroll=False)
+        self.tv_ids = self._tree(ic, [("folder", "Original", 380), ("new_id", "New ID", 200), ("keeps", "Keeps", 280)], height=3, xscroll=False)
         self.tv_ids.bind("<Double-1>", self._edit_id)
         fp = ttk.Frame(s4)
         fp.grid(row=2, column=0, columnspan=5, sticky="ew")
@@ -765,7 +769,7 @@ class App(tk.Tk):
         ttk.Checkbutton(adv3, text="Keep scanner technical details", variable=self.v_keep_tech, style=switch).pack(side="left", padx=(0, 24))
         ttk.Checkbutton(adv3, text="No series sub-folders", variable=self.v_flat, style=switch).pack(side="left")
         self.lbl_summary = ttk.Label(s4, textvariable=self.v_summary_short, wraplength=WRAP, justify="left", style="H2.TLabel")
-        self.lbl_summary.grid(row=7, column=0, columnspan=5, sticky="w", pady=(10, 6))
+        self.lbl_summary.grid(row=7, column=0, columnspan=5, sticky="w", pady=(6, 4))
         act = ttk.Frame(s4)
         act.grid(row=8, column=0, columnspan=5, sticky="w", pady=(2, 0))
         self.b_start = ttk.Button(act, text="Anonymise", width=16, style=accent, command=self._start_run)
@@ -778,7 +782,7 @@ class App(tk.Tk):
         self.b_viewer.pack(side="left", padx=(28, 0), ipady=6)
         Tooltip(self.b_dry, "A dry run: reads everything and reports what would be written, without writing anything.")
         self.lbl_ready = ttk.Label(s4, textvariable=self.v_ready, wraplength=WRAP, justify="left")
-        self.lbl_ready.grid(row=9, column=0, columnspan=5, sticky="w", pady=(8, 0))
+        self.lbl_ready.grid(row=9, column=0, columnspan=5, sticky="w", pady=(4, 0))
 
         # ---- step 5: done. One headline, the things to do next, what still needs a human, and what was removed
         s5 = self.steps[4]
@@ -792,7 +796,7 @@ class App(tk.Tk):
         self.lbl_done_head.pack(anchor="w")
         ttk.Label(ht, textvariable=self.v_done_detail, style="Muted.TLabel", wraplength=WRAP - 100, justify="left").pack(anchor="w", pady=(2, 0))
         dact = ttk.Frame(s5)
-        dact.grid(row=2, column=0, columnspan=5, sticky="w", pady=(16, 0))
+        dact.grid(row=2, column=0, columnspan=5, sticky="w", pady=(12, 0))
         self.b_done_view = ttk.Button(dact, text="View the scans", style=accent, command=lambda: self._viewer("output"))
         self.b_done_open = ttk.Button(dact, text="Open the folder", command=lambda: self._open(self._out()))
         self.b_done_hand = ttk.Button(dact, text="Hand over", command=self._handover)
@@ -805,10 +809,10 @@ class App(tk.Tk):
         Tooltip(self.b_done_cert, "A one-page record of what was anonymised and checked. It carries no patient identifiers and travels with the output.")
         Tooltip(self.b_done_details, "Every series decision, the full check report (and extra words to search for), and the sharing checks.")
         self.f_issues = ttk.Frame(s5)
-        self.f_issues.grid(row=3, column=0, columnspan=5, sticky="ew", pady=(14, 0))
+        self.f_issues.grid(row=3, column=0, columnspan=5, sticky="ew", pady=(8, 0))
         self.card_done = ChangeCard(s5, columns=2, wrap=WRAP - 60)
-        self.card_done.grid(row=4, column=0, columnspan=5, sticky="w", pady=(14, 0))
-        ttk.Button(s5, text="Open a different output folder...", command=self._choose_output).grid(row=5, column=0, columnspan=2, sticky="w", pady=(14, 0))
+        self.card_done.grid(row=4, column=0, columnspan=5, sticky="w", pady=(8, 0))
+        ttk.Button(s5, text="Open a different output folder...", command=self._choose_output).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
 
         # ---- one slim row under the steps: what Next is waiting for, and the rarely used actions
         nav = ttk.Frame(t, padding=(8, 2))
@@ -834,7 +838,7 @@ class App(tk.Tk):
         self.card.columnconfigure(0, weight=1)
         self.v_card_title, self.v_card_text = tk.StringVar(), tk.StringVar()
         ttk.Label(self.card, textvariable=self.v_card_title, style="H2.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Label(self.card, textvariable=self.v_card_text, wraplength=560, justify="left").grid(row=1, column=0, sticky="w", pady=(2, 0))
+        ttk.Label(self.card, textvariable=self.v_card_text, wraplength=620, justify="left").grid(row=1, column=0, sticky="w", pady=(2, 0))
         self.b_card = ttk.Button(self.card, text="", style=accent)
         self.b_card.grid(row=0, column=1, rowspan=2, padx=(16, 0))
         self.b_card2 = ttk.Button(self.card, text="")
@@ -843,9 +847,10 @@ class App(tk.Tk):
         self.card.grid_remove()
 
         # ---- progress and activity
-        prog = ttk.Frame(t, padding=(8, 0))
+        prog = self.f_prog = ttk.Frame(t, padding=(8, 0))        # appears with the first job
         prog.grid(row=3, column=0, sticky="ew", pady=(6, 4))
         prog.columnconfigure(0, weight=1)
+        prog.grid_remove()
         self.bar = ttk.Progressbar(prog, variable=self.v_progress, maximum=100)
         self.bar.grid(row=0, column=0, sticky="ew")
         ttk.Label(prog, textvariable=self.v_progress_text, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(3, 0))
@@ -854,7 +859,7 @@ class App(tk.Tk):
         logf.columnconfigure(0, weight=1)
         logf.rowconfigure(0, weight=1)
         logf.grid_remove()
-        self.log = tk.Text(logf, font=MONO, wrap="none", state="disabled", height=7, width=60, undo=False)
+        self.log = tk.Text(logf, font=MONO, wrap="none", state="disabled", height=3, width=60, undo=False)
         ys = ttk.Scrollbar(logf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=ys.set)
         self.log.grid(row=0, column=0, sticky="nsew")
@@ -889,14 +894,16 @@ class App(tk.Tk):
                 self.v_cases.set(cases)
         listway = self.v_listway.get()
         self.v_way.set("list" if listway else "folder")
-        show_folder = bool(cases) and not listway     # nothing but the question until it has been answered
+        # nothing but the question until it has been answered, unless a folder was dropped and is being read
+        show_folder = (bool(cases) or self._scanning() or self.intake is not None) and not listway
         (self.f_list.grid if listway else self.f_list.grid_remove)()
         (self.f_folder.grid if show_folder else self.f_folder.grid_remove)()
         (self.cb_listway.grid if cases == "many" else self.cb_listway.grid_remove)()
         self.steps[0].rowconfigure(2, weight=1 if show_folder else 0)
         one = cases == "one"
-        self.v_folder_help.set("Choose this patient's folder. Every sub-folder is searched. Nothing in it is changed." if one else
-                               "Choose the folder that holds all the patients, each in a folder of their own. Every sub-folder is searched. Nothing in it is changed.")
+        drop = " Or drop the folder on this window." if getattr(self, "dnd_ok", False) else ""
+        self.v_folder_help.set(("Choose this patient's folder. Every sub-folder is searched. Nothing in it is changed." if one else
+                                "Choose the folder that holds all the patients, each in a folder of their own. Every sub-folder is searched. Nothing in it is changed.") + drop)
         self.b_open.configure(text="Choose the patient's folder..." if one else "Choose the folder of patients...")
         self._refresh_found_headline()
         (self.f_kinds.grid_remove if listway else self.f_kinds.grid)()
@@ -956,6 +963,11 @@ class App(tk.Tk):
             self.f_log.grid()
             self.tab_run.rowconfigure(4, weight=1)
             self.log.see("end")
+            # a small window has no room to spare for it: make room rather than squeeze the steps
+            self.update_idletasks()
+            h, room = self.winfo_height(), self.winfo_screenheight() - 90
+            if h < 900 and room > h:
+                self.geometry(f"{self.winfo_width()}x{min(room, h + 110)}")
         else:
             self.f_log.grid_remove()
             self.tab_run.rowconfigure(4, weight=0)
@@ -1160,12 +1172,23 @@ class App(tk.Tk):
         gc.collect()      # finalise closed windows' Tk variables here, on the main thread, not from the worker's collector
         self._scan_thread = threading.Thread(target=work, daemon=True)
         self._scan_thread.start()
+        self._apply_way()
         self._live_validate()
         if wait:      # the demo and the self-test: stay here until the folder has been read and the tables are filled
             while self._scan_thread is not None:
                 self._poll_scan()
                 self.update()
                 time.sleep(0.02)
+
+    def _dropped(self, folder: Path) -> None:
+        """A folder was dropped on the window: the same as choosing it. Whether it is one patient or several is read
+        from what the folder holds, unless the question has already been answered."""
+        if (self.proc and self.proc.running) or self._scanning():
+            self.v_status.set("Busy: drop the folder again when this has finished.")
+            return
+        self.v_listway.set(False)
+        self._goto_step(0)
+        self._open_folder(str(folder))
 
     def _cancel_scan(self) -> None:
         self._scan_cancel = True
@@ -1960,7 +1983,7 @@ class App(tk.Tk):
                     else:
                         text, level = "Anonymised, not yet safe to hand over: " + next(c.title for c in checks if c.level == "block"), "warn"
                 elif "warn" in levels:
-                    text, level = "Verified. Read the warnings on Share safely before handing over.", "warn"
+                    text, level = "Verified. The results screen lists what still needs a look before handing over.", "warn"
                 else:
                     text, level = "Verified. Safe to hand over.", "ok"
         colours = {"muted": (pal["border"], pal["text"]), "info": (brand.NAVY, "#ffffff"), "ok": (brand.TEAL_DARK, "#ffffff"),
@@ -1982,6 +2005,7 @@ class App(tk.Tk):
             if logs:
                 self.log_path = logs / f"app_{log_name}_{time.strftime('%Y%m%d_%H%M%S')}.txt"
         self._clear_log()
+        self.f_prog.grid()
         if job != "verify":
             self._hide_card()
         self.skipped_hidden = 0
@@ -2270,7 +2294,8 @@ class App(tk.Tk):
         if match:
             self.v_profile_label.set(match.label)
             self.v_profile_desc.set(match.profile.describe() + "  Written into every file as: " + match.profile.method_string(model.ENGINE_VERSION))
-            self.v_status.set(self.v_profile_desc.get())
+            kept = [KEPT_WORDS.get(k, k) for k in match.profile.kept_summary()]
+            self.v_status.set("Removes everything identifying." if not kept else "Removes everything identifying except " + ", ".join(kept) + ".")
         self._update_banner()
 
     def _profile_chosen(self) -> None:
@@ -2596,6 +2621,7 @@ class App(tk.Tk):
         self.update()
         ed.destroy()
         print("selftest: window built, all tabs and steps drawn, viewer opened, profile editor opened", flush=True)
+        print(f"selftest: drag-and-drop {'available' if self.dnd_ok else 'not available on this build (the Choose button still works)'}", flush=True)
         self._selftest_viewer_on_synthetic_patients()
         self._selftest_demo()
         self.after(200, self.destroy)

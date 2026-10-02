@@ -3,6 +3,7 @@ openpyxl==3.1.5
 numpy==2.5.3
 python-gdcm==3.2.6
 sv-ttk==2.6.1
+tkinterdnd2==0.6.3
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.7
 pytest==9.1.1

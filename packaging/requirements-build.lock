@@ -622,6 +622,10 @@ sv-ttk==2.6.1 \
     --hash=sha256:47589d5e20398cf404e8362f24f3ed48f3830cd0ace056d83354fa25d8e4fe48 \
     --hash=sha256:8ca5944f95431a911986b00c54e7f44608f3f811382cd985fd14bb3e65f95d97
     # via -r packaging/requirements-build.in
+tkinterdnd2==0.6.3 \
+    --hash=sha256:50c7386302104bfb30d8e15b4cc53c0581bc51a28186ff4d7ad3cb2cc820c936 \
+    --hash=sha256:53ed472ec08705702e087b5664f0534ca53a07a67102255f9cdc82bc5094158b
+    # via -r packaging/requirements-build.in
 tomli==2.4.1 \
     --hash=sha256:01f520d4f53ef97964a240a035ec2a869fe1a37dde002b57ebc4417a27ccd853 \
     --hash=sha256:0d85819802132122da43cb86656f8d1f8c6587d54ae7dcaf30e90533028b49fe \

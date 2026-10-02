@@ -29,7 +29,8 @@ thing not to break. Read `README.md`, `CHANGELOG.md` and `docs/tag_policy.md` be
 - `scrubdicom/survey.py`   standalone series survey / select
 - `scrubdicom/fixtures.py` synthetic test patients with planted identifiers (no real data anywhere in the repo)
 - `scrubdicom/demo_data.py` synthetic patients for the app's demo (drawn chest CT, X-ray, dose report, echo frame)
-- `scrubdicom/app/`       desktop app: `model.py` logic (no Tk, unit-tested), `intake.py` the folder-first flow's logic
+- `scrubdicom/app/`       desktop app: `model.py` logic (no Tk, unit-tested), `certificate.py` the one-page PDF (stdlib only),
+                           `plain.py` the plain-words change summary, `dnd.py` drop-a-folder (optional tkdnd), `intake.py` the folder-first flow's logic
                            (scan a folder, kinds of series, new IDs, the files the engine reads; no Tk, unit-tested), `runner.py` engine child process,
                            `ui.py` the Tk window, `preview.py` viewer logic (scan, header diff, pixels, redaction,
                            reformats; no Tk), `viewer.py` the viewer window, `profile_ui.py` profile editor,

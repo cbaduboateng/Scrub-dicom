@@ -67,6 +67,7 @@ for choice in ("coronary", "choose"):
             app._show_step(step); app.update(); r = clipped(app)
             if r: report.append(f"[main/run folder-first demo choice={choice} remove={strip} step={step+1}]"); report += r
 app.v_strip_choice.set("default"); app._strip_changed()
+app.f_prog.grid()          # as after a job: the progress row is showing too
 app._show_card("A card", "With a card showing above the steps, the buttons of the last step must still be inside the window. " * 2, "Button", lambda: None, "Second", lambda: None)
 for step in range(N_STEPS):
     app._show_step(step); app.update(); r = [x for x in clipped(app) if "Text" not in x.split()[0]]

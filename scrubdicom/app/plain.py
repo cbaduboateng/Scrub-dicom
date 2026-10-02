@@ -13,7 +13,7 @@ from dataclasses import dataclass
 FIELDS: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("Name", ("PatientName",), "name"),
     ("Hospital number", ("PatientID",), "text"),
-    ("NHS / other numbers", ("OtherPatientIDs",), "text"),
+    ("Other IDs", ("OtherPatientIDs",), "text"),
     ("Date of birth", ("PatientBirthDate",), "date"),
     ("Sex", ("PatientSex",), "sex"),
     ("Age", ("PatientAge",), "age"),
@@ -82,7 +82,7 @@ def plain_changes(rows) -> tuple[list[Change], str]:
         elif all(not a for a in afters):
             out.append(Change(label, before, "removed", "removed"))
         elif kind == "date" and afters[0][:8] in DUMMY_DATES:
-            out.append(Change(label, before, f"{nice_date(afters[0])} (a dummy date)", "replaced"))
+            out.append(Change(label, before, f"{nice_date(afters[0])} (dummy)", "replaced"))
         elif kind == "date":
             out.append(Change(label, before, f"{nice_date(afters[0])} (moved)", "replaced"))
         elif "kept" in states and len(states) > 1:

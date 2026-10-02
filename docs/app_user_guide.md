@@ -52,11 +52,13 @@ app's own folder is written.
 
 ## The tabs
 
-The tabs are numbered in the order you use them. The **Dark / Light** button in the header switches the look.
+Three tabs: **Home**, **Anonymise** and **Help**. The Anonymise tab is one journey of five steps: Open, Scans,
+Remove, Save, Done. A fourth tab, **Details**, appears when you ask for it from the Done step. The **Dark / Light**
+button in the header switches the look.
 
-### 1  Anonymise
+### Anonymise
 
-Four steps, one screen each. **Next** becomes available when a step is complete, and a line under the steps says
+Five steps, one screen each. **Next** becomes available when a step is complete, and a line under the steps says
 what is still missing.
 
 **Step 1: Open your scans.** First answer one question: **One patient** or **Several patients**. Nothing else is
@@ -158,40 +160,46 @@ cursor is shown top right. **Open in viewer app** hands the current file, or the
 viewer application of your choice: pick it once with "Choose viewer application..." (Bee, Horos,
 Weasis, MicroDicom); the choice is remembered.
 
-### 2  Check series
+**Step 5: Done.** The run ends here by itself. One headline tells you where you stand: a green tick ("2 patients
+anonymised and verified"), an amber mark (anonymised but not yet checked, or changed since the check), or a red
+cross (the check failed: do not share).
 
-One row per series per patient: **kept**, **dropped**, or **needs a look**. "Needs a look" means the
-engine used a fallback rule (no contrast agent or cardiac phase in the header, or an
-already-analysed pick that did not match) and a human should confirm the right series was kept.
-Filter, search by new ID, and export as CSV for a colleague.
+- **View the scans** opens the anonymised output in the viewer. **Open the folder** opens the output folder.
+- **Hand over** compares every file with the checksum list written at the check, then opens the folder. Only an
+  unchanged output is handed over.
+- **Certificate (PDF)** opens a one-page record of the run: how many patients and files, what was removed and what
+  was kept, the result, the checksum list with its SHA-256, the new IDs, what the check does not cover, and a line
+  for a signature. It carries no patient identifier. It is written into the output's `_logs` folder as soon as the
+  output verifies, so it travels with it.
+- **Check now** (or **Check again**) runs the check.
+- Under the buttons the app lists anything that still needs a person, each with its own button: files held back
+  for a look (X-rays, ultrasound, reports: **Look at them**), confidential logs inside the output (**Move them
+  out**), unfinished patients.
+- **What was removed** shows one of your own files in plain words: the name, numbers, dates, hospital, doctor and
+  scanner, each with what it became. The same card on step 3 updates as you tick what to keep.
+- **Open a different output folder** shows the results of an earlier run.
 
-### 3  Verify output
+While a run is going, the line under the bar says which patient, how many files, and about how long is left. A
+long run ends with a desktop notification on macOS, and the bell everywhere. **Activity log** (bottom right) shows
+the engine's own line-by-line output; it is hidden unless you ask for it.
 
-Re-opens every output file and fails on any private tag, real date, original UID, vendor or
-institution text, person name, or any extra word you type. Type consultant surnames, the hospital's
-ODS code, anything specific to the cohort, separated by commas. These words are forgotten when you
-close the app. The result is PASS or FAIL with the exact file and tag for each finding.
+**Drag and drop.** A folder dropped anywhere on the window is opened like a chosen one. Whether it is one patient
+or several is read from what the folder holds.
 
-**Do not share output that has not passed.**
+### Details
 
-### 4  Share safely
+**Details** on the Done step opens a tab with three pages.
 
-The `_logs` folder is confidential, not just the LINKAGE file. The per-file and per-patient CSVs and
-the run logs all record the original folder paths, and folders are usually named by hospital
-number.
+**Series decisions.** One row per series per patient: kept, dropped, or "needs a look" (the engine used a fallback
+rule because the header lacked contrast or cardiac-phase information). Filter, search by new ID, export as CSV.
 
-- **Hand over** is disabled until the check has passed and no linking file is inside the output folder;
-  the reasons are listed. When you press it, every output file is re-hashed against the manifest written at
-  verification, and only an unchanged tree is opened. The checksum manifest and the attestation in `_logs`
-  travel with the output. **Is the output folder safe to hand over?** lists what still stands between the
-  output folder and a reader: check status, half-finished patients, quarantined files in `_review`, linking or other
-  confidential logs still inside the tree.
-- **Move the patient-linking logs out** moves everything except `uid_salt.txt` (needed so a re-run
-  produces the same UIDs) and passed check reports to a folder you choose outside the output tree.
-  Keep that folder with the linkage information, on an encrypted drive, away from the scans.
-- **Open quarantined files (_review)**: look at every file there before deciding whether to share it.
-  They are secondary captures, reports and PDFs whose headers are clean but whose pixels may carry
-  burned-in text. The safe default is to delete them from what you share.
+**Check report.** The full report of the newest check, and a box for extra words that must never appear in the
+output: consultant surnames, the hospital's ODS code, anything specific to the cohort, separated by commas. The
+original IDs in the linkage log are searched for automatically. The words you type are forgotten when you close
+the app.
+
+**Sharing checks and logs.** Every check that stands between the output and a hand-over, the files in the
+output's `_logs` folder with a note on each, **Move confidential logs out**, and **Review quarantined files**.
 
 ### Help
 

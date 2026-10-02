@@ -26,13 +26,13 @@ def test_default_profile_in_plain_words(sample):
     assert (by["Name"].before, by["Name"].after, by["Name"].state) == ("SMITH JOHN", "DEMO-002", "replaced")
     assert by["Hospital number"].before == "1234567" and by["Hospital number"].after == "DEMO-002"
     assert (by["Date of birth"].before, by["Date of birth"].after) == ("14 Mar 1961", "removed")
-    assert by["Scan date"].before == "22 May 2019" and by["Scan date"].after == "1 Jan 1900 (a dummy date)"
+    assert by["Scan date"].before == "22 May 2019" and by["Scan date"].after == "1 Jan 1900 (dummy)"
     assert by["Sex"].before == "male" and by["Sex"].state == "removed"
     assert by["Age"].before == "58 years" and by["Age"].state == "removed"
     assert by["Referring doctor"].before == "BLOGGS J Dr" and by["Referring doctor"].state == "removed"
     assert by["Hospital"].before == "Example Hospital" and by["Hospital"].state == "removed"
     assert by["Scanner"].before == "SIEMENS SOMATOM Force" and by["Scanner"].state == "removed"
-    assert by["NHS / other numbers"].state == "removed" and by["Address"].state == "removed" and by["Comments"].state == "removed"
+    assert by["Other IDs"].state == "removed" and by["Address"].state == "removed" and by["Comments"].state == "removed"
     assert not any(c.state == "kept" for c in changes), "the default keeps nothing that identifies"
     assert "other fields were removed or replaced" in more and "hidden vendor tags" in more and "every original UID" in more
 

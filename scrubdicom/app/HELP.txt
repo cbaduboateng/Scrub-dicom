@@ -10,8 +10,9 @@ What it does
   This app never connects to the internet. It starts the same engine the command line uses, as a
   separate process, and shows you its output.
 
-The tabs run in order: Anonymise, Check series, Verify output, Share safely. The Dark / Light button in the header
-switches the look.
+Three tabs: Home, Anonymise, Help. The Anonymise tab is one journey of five steps: Open, Scans, Remove, Save, Done.
+A fourth tab, Details, appears when you ask for it from the Done step. The Dark / Light button in the header switches
+the look.
 
 HOME
   Open scans (choose a folder and start), See the demo, Viewer. "This session" shows the output folder in use, how
@@ -26,7 +27,7 @@ THE DEMO
   Home or Help > "See the demo" loads two made-up patients into the ordinary four steps. Walk through them, or
   press "Play it for me". Nothing real is involved and nothing outside the app's own folder is written.
 
-TAB 1  ANONYMISE: FOUR STEPS
+THE ANONYMISE TAB: FIVE STEPS
   Step 1  Open your scans
     First say what you are anonymising: One patient, or Several patients. Nothing else is shown until you do.
       One patient        choose that patient's folder; on the last step you type one new ID. If the folder turns
@@ -83,9 +84,33 @@ TAB 1  ANONYMISE: FOUR STEPS
       Open viewer        the built-in DICOM viewer (below).
     If something goes wrong a card appears above the steps with one button: Resume after a drive disconnects, Open
     report after a failed check.
+    While a run is going the line under the bar says which patient, how many files, and about how long is left. A
+    long run ends with a desktop notification (macOS) or the bell. "Activity log" shows the engine's own output.
 
-THE VIEWER  ("Look at the images" on step 2 and "Open viewer" on step 4; "Open patient in viewer" on tab 2;
-             "Review and redact quarantined files" on tab 4)
+  Step 5  Done
+    One headline: a green tick ("N patients anonymised and verified"), an amber mark (anonymised but not yet
+    checked, or changed since the check) or a red cross (the check failed: do not share).
+      View the scans      the anonymised output in the viewer.
+      Open the folder     the output folder.
+      Hand over           compares every file with the checksum list written at the check, then opens the folder.
+                          Only an unchanged output is handed over.
+      Certificate (PDF)   a one-page record: how many patients and files, what was removed and kept, the result,
+                          the checksum list and its SHA-256, the new IDs, what the check does not cover, and a line
+                          to sign. It carries no patient identifier and is written into the output's _logs folder as
+                          soon as the output verifies, so it travels with it.
+      Check now / again   runs the check.
+      Details             opens the Details tab (below).
+    Under the buttons, anything that still needs a person: files held back for a look ("Look at them" opens the
+    viewer on them), confidential logs inside the output ("Move them out"), unfinished patients.
+    "What was removed" shows one of your own files in plain words: name, numbers, dates, hospital, doctor, scanner,
+    each with what it became. The same card on step 3 updates as you tick what to keep.
+    "Open a different output folder" shows the results of an earlier run.
+
+  Drag and drop
+    A folder dropped anywhere on the window is opened like a chosen one. Whether it is one patient or several is
+    read from what it holds.
+
+THE VIEWER  ("Look at the images" on step 2, "Open viewer" on step 4, "View the scans" and "Look at them" on step 5)
   Two views of the same window:
     Original scans     what Anonymise WILL do, computed in memory: every series with its keep/drop decision and a
                        thumbnail, the images, and the header before and after with each removed, changed or added
@@ -106,18 +131,19 @@ THE VIEWER  ("Look at the images" on step 2 and "Open viewer" on step 4; "Open p
   file to a viewer application of your choice: "Open in viewer app" > "Choose viewer application..." once,
   then "This file" or "This series' folder" (Bee, Horos, Weasis, MicroDicom...).
 
-TAB 2  CHECK SERIES
+THE DETAILS TAB (Done > Details)
+  Series decisions
   One row per series per patient: kept, dropped, or "needs a look" (the engine used a fallback rule because
   the header lacked contrast or cardiac-phase information, or an already-analysed pick did not match). Look at
   those. Filter, search by new ID, export as CSV.
 
-TAB 3  VERIFY OUTPUT
+  Check report
   Re-opens every output file and fails on any private tag, real date, original UID, vendor or institution
   text, person name, or any extra word you type: consultant surnames, the hospital's ODS code, anything
   specific to the cohort, separated by commas. The linking logs' original IDs are used automatically. The
   words you type are forgotten when you close the app. Do not share output that has not passed.
 
-TAB 4  SHARE SAFELY
+  Sharing checks and logs
   "Hand over" is disabled until the check has passed and no linking file is inside the output folder; the reasons
   are listed. Pressing it re-hashes every output file against the manifest written at verification and opens the
   folder only if nothing changed. The manifest and the attestation (what was verified, by which version, with

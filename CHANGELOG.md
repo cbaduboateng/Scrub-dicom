@@ -18,6 +18,23 @@ Folder-first flow, after a live demo showed the first screen asked for lists and
   stable across sessions: re-opening a folder with the same destination folders gives every patient the ID it had.
   The two destination folders are suggested next to the opened folder under names that never include its name.
   Anonymise no longer needs a separate Preview first in this flow: the scan and the series list are the preview.
+- **One journey, one results screen.** The numbered tabs (Check series, Verify output, Share safely) are gone. The
+  Anonymise tab has a fifth step, Done: one headline (tick, warning or cross), the next actions (view the scans,
+  open the folder, hand over, certificate, check), and whatever still needs a person, each with its own button:
+  files held back for a look, confidential logs inside the output, unfinished patients. The old tabs' content is a
+  Details tab that appears on demand. A run ends on Done by itself.
+- **Certificate.** A one-page PDF for every verified output (`scrubdicom/app/certificate.py`, standard library only):
+  patients, files, what was removed and kept, the result, the checksum list and its SHA-256, the new IDs, what the
+  check does not cover, a line to sign. No patient identifier is on it; it is written into the output's `_logs` as
+  soon as the output verifies and does not disturb the checksum re-check.
+- **Pictures on step 2.** Each kind of series has a thumbnail, loaded one at a time after the folder is read.
+- **What was removed, in plain words.** A card shows one of the user's own files: "Name SMITH JOHN, now DEMO-001",
+  "Date of birth, removed" (`scrubdicom/app/plain.py`). On step 3 it updates as options are ticked; on Done it is
+  the record of what happened.
+- **Less engineering on screen.** The engine's log is behind an "Activity log" toggle; the progress line estimates
+  the time left; a long run ends with a desktop notification (macOS, via the system's own osascript) or the bell.
+- **Drag and drop.** A folder dropped anywhere on the window is opened like a chosen one (tkdnd through the
+  `tkinterdnd2` package, MIT, hash-pinned; optional at run time: without it the Choose button is all there is).
 - The list-driven methods (patient-list CSV; folder plus ID spreadsheet) are unchanged behind "I already have a
   patient list (CSV) or an ID spreadsheet" on step 1, shown side by side. The separate "One patient" method is gone
   from the window: opening that patient's folder does the same thing. (The engine's `--input --study-id` is unchanged.)
@@ -30,6 +47,8 @@ Folder-first flow, after a live demo showed the first screen asked for lists and
   "Verified. Safe to hand over." without a detour through "Move confidential logs out".
 - New `scrubdicom/app/intake.py` (scan, kinds, IDs, the files the engine reads; no Tk; 18 tests) and
   `scrubdicom/demo_data.py`. The engine is unchanged apart from the version number.
+- Found on the way: on macOS, Tk redraws for ever when a window that has never been shown is filled with data,
+  which froze the app at the end of a run while Details was a separate window. It is a tab for that reason.
 
 ## 0.6.1 (2026-09-21)
 First Windows build, and two Windows fixes found by CI.
