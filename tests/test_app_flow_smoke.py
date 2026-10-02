@@ -234,6 +234,51 @@ def test_the_confirmation_is_a_few_plain_rows(app, scans):
     assert asked == [1] and not (app.proc and app.proc.running), "declined: nothing starts"
 
 
+def test_start_again_clears_the_form_and_touches_nothing_on_disk(app, scans):
+    app._open_folder(str(scans), wait=True)
+    app.v_choice.set("choose")
+    app._choice_changed()
+    app.v_kind_query.set("cta")
+    app.v_strip_choice.set("custom")
+    app.v_keep["keep_sex"].set(True)
+    app._strip_changed()
+    app.v_prefix.set("SCAD")
+    assert app._materialise()
+    conf, out = Path(app.v_confidential.get()), app.v_output.get()
+    before = sorted(p.name for p in conf.iterdir())
+    n_scans = sum(1 for _ in scans.rglob("*.dcm"))
+    app._goto_step(SAVE_STEP)
+    app._show_card("A card", "left over from before", "OK", lambda: None)
+    # nothing typed by hand yet: no question asked
+    assert app._reset() is True and not [d for d in app.dialogs if d[1] == "Start again?"]
+    assert app.intake is None and app.kinds == [] and app.ticked == set() and app.overrides == {}
+    assert (app.v_cases.get(), app.v_folder.get(), app.v_output.get(), app.v_confidential.get(), app.v_kind_query.get()) == ("", "", "", "", "")
+    assert app.v_choice.get() == "coronary" and app.v_strip_choice.get() == "default" and app.v_profile.get() == "" and app.v_prefix.get() == "ANON"
+    assert not any(v.get() for v in app.v_keep.values()) and app.v_banner.get() == "" or not app.banner.winfo_ismapped()
+    assert app.step == 0 and app.nb.select() == str(app.tab_run) and not app.card.winfo_ismapped()
+    app.update()
+    assert not app.f_folder.winfo_ismapped(), "back to the one question"
+    assert app._problems_by_step()[0] == ["Say whether this is one patient or several."]
+    assert not app.tv_found.get_children("") and not app.tv_kinds.get_children("") and not app.tv_ids.get_children("")
+    assert app.v_strip.get() == "Not started" and app.v_done_head.get() == "Nothing has been anonymised yet"
+    # the disk is exactly as it was
+    assert sorted(p.name for p in conf.iterdir()) == before and sum(1 for _ in scans.rglob("*.dcm")) == n_scans and out
+    # a typed ID is something to lose: now it asks, and "no" keeps everything
+    app._open_folder(str(scans), wait=True)
+    app._rename(app.intake.units[0], "Case A")
+    answers = [False]
+    app.dialogs.clear()
+    from scrubdicom.app import ui
+    ui.messagebox.askokcancel = lambda title="", message="", **k: app.dialogs.append(("askokcancel", title, message)) or answers[0]
+    assert app._reset() is False and app.intake is not None and app.intake.units[0].new_id == "Case A"
+    assert app.dialogs and app.dialogs[0][1] == "Start again?" and "Nothing on disk" in app.dialogs[0][2]
+    answers[0] = True
+    assert app._reset() is True and app.intake is None
+    # the same folder opens cleanly afterwards
+    app._open_folder(str(scans), wait=True)
+    assert len(app.intake.units) == 2 and [u.new_id for u in app.intake.units] == ["ANON-001", "ANON-002"]
+
+
 def test_output_inside_the_scans_is_refused(app, scans):
     app._open_folder(str(scans), wait=True)
     app.v_output.set(str(scans / "out"))

@@ -185,6 +185,10 @@ While a run is going, the line under the bar says which patient, how many files,
 long run ends with a desktop notification on macOS, and the bell everywhere. **Activity log** (bottom right) shows
 the engine's own line-by-line output; it is hidden unless you ask for it.
 
+**Start again.** The button at the bottom of every step clears the folder, the choices, the new IDs and the two
+destinations and returns to the first question. It asks first only if you typed IDs or ticked series by hand.
+Nothing on disk is deleted or changed.
+
 **Drag and drop.** A folder dropped anywhere on the window is opened like a chosen one. Whether it is one patient
 or several is read from what the folder holds.
 

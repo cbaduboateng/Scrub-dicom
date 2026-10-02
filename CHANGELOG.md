@@ -41,6 +41,9 @@ Folder-first flow, after a live demo showed the first screen asked for lists and
   folder (16,000 studies would otherwise hold over a gigabyte of them), cohort totals are worked out once per change
   instead of several times per click, and the table of new IDs is rebuilt only while it is on screen. Timed on a
   simulated 16,000-study cohort: every click under a third of a second.
+- **Start again.** A button at the bottom of every step (and File > Start again) clears the folder, the choices,
+  the new IDs and the destinations and returns to the first question. It asks first only when IDs were typed or
+  series ticked by hand. Nothing on disk is deleted or changed.
 - **A confirmation you can read.** Pressing Anonymise opens a small window with a question as its heading and one
   fact per row (from, keeping, removing, where the copies go, where the key goes), with folder paths shortened and
   the full path in a tooltip. It replaces a system message box that ran five lines and two long paths together.

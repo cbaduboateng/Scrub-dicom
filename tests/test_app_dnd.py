@@ -34,7 +34,8 @@ def test_drop_data_is_a_tcl_list(root, tmp_path):
     a, b = tmp_path / "with space", tmp_path / "plain"
     data = root.tk.call("list", str(a), str(b))
     assert dnd.dropped_paths(root, data) == [a, b]
-    assert dnd.dropped_paths(root, "{" + str(a) + "} " + str(b)) == [a, b], "braces around a name with spaces"
+    # braces around each name, as the system sends them: spaces and Windows backslashes both survive
+    assert dnd.dropped_paths(root, "{" + str(a) + "} {" + str(b) + "}") == [a, b]
     assert dnd.dropped_paths(root, "") == []
 
 

@@ -109,6 +109,10 @@ THE ANONYMISE TAB: FIVE STEPS
     each with what it became. The same card on step 3 updates as you tick what to keep.
     "Open a different output folder" shows the results of an earlier run.
 
+  Start again
+    The button at the bottom of every step clears the folder, the choices, the new IDs and the two destinations and
+    returns to the first question. Nothing on disk is deleted or changed; an output already written stays where it is.
+
   Drag and drop
     A folder dropped anywhere on the window is opened like a chosen one. Whether it is one patient or several is
     read from what it holds.

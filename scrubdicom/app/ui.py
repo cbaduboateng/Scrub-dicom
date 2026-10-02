@@ -433,6 +433,7 @@ class App(tk.Tk):
         m = tk.Menu(self)
         f = tk.Menu(m, tearoff=False)
         f.add_command(label="Open a folder of scans...", command=self._home_open)
+        f.add_command(label="Start again", command=self._reset)
         f.add_separator()
         f.add_command(label="Open output folder", command=lambda: self._open(self._out()))
         f.add_command(label="Open _logs folder", command=lambda: self._open(self._logs()))
@@ -883,6 +884,8 @@ class App(tk.Tk):
         nav.grid(row=2, column=0, sticky="ew")
         ttk.Label(nav, textvariable=self.v_nav_reason, style="Warn.TLabel", wraplength=700, justify="left").pack(side="left")
         ttk.Checkbutton(nav, text="Activity log", variable=self.v_show_log, command=self._toggle_log, style=toggle).pack(side="right", padx=(8, 0))
+        self.b_reset = ttk.Button(nav, text="Start again", command=self._reset)
+        Tooltip(self.b_reset, "Clear the folder, the choices and the new IDs, and go back to the first step. Nothing on disk is deleted or changed.")
         more = ttk.Menubutton(nav, text="More")
         mm = tk.Menu(more, tearoff=False)
         mm.add_command(label="Show the command this will run", command=self._show_command)
@@ -895,6 +898,7 @@ class App(tk.Tk):
         mm.add_checkbutton(label="Show the rarely needed options", variable=self.v_more, command=self._apply_mode)
         more["menu"] = mm
         more.pack(side="right")
+        self.b_reset.pack(side="right", padx=(0, 8))
 
         # ---- recovery card (hidden until needed)
         self.card = ttk.Frame(t, padding=(16, 10, 16, 12), style=theme.style_or("Card.TFrame"))
@@ -1166,6 +1170,50 @@ class App(tk.Tk):
             pass
 
     # ------------------------------------------------------------------ the folder-first flow
+    def _reset(self, ask: bool = True) -> bool:
+        """Start again: forget the folder, the choices, the new IDs and the destinations, and return to the first step
+        with nothing answered. Only the form is cleared: nothing on disk is deleted, moved or changed."""
+        if self.proc and self.proc.running:
+            messagebox.showinfo(APP_NAME, "A job is running. Stop it first, then start again.")
+            return False
+        if self._scanning():
+            self._scan_cancel = True
+            self.v_status.set("Stopping the read of the folder. Press Start again once more when it has stopped.")
+            return False
+        if ask and (self._ids_edited or self.overrides) and not messagebox.askokcancel(
+                "Start again?", "The new IDs you typed and the series you ticked will be cleared.\n\nNothing on disk is deleted or changed."):
+            return False
+        self.demo_stage = None
+        self.previewed_key = None
+        self.intake, self.kinds, self.ticked, self.overrides = None, [], set(), {}
+        self.kind_thumbs, self._thumb_queue, self._card_key, self._memo = {}, [], None, {}
+        self._ids_edited, self._ids_version, self._auto_dirs = False, self._ids_version + 1, ("", "")
+        self._last_suggested = ""
+        for v in (self.v_folder, self.v_folder_shown, self.v_found, self.v_found_notes, self.v_cases, self.v_kind_query, self.v_one_id,
+                  self.v_output, self.v_confidential, self.v_manifest, self.v_input, self.v_study_id, self.v_mapping, self.v_remap,
+                  self.v_series_pick, self.v_series_select, self.v_needles, self.v_progress_text, self.v_plan):
+            v.set("")
+        self._folder_tip.text = ""
+        self.v_listway.set(False)
+        self.v_prefix.set("ANON")
+        self.v_choice.set("coronary")
+        self.v_strip_choice.set("default")
+        for v in self.v_keep.values():
+            v.set(False)
+        self.v_progress.set(0)
+        self._hide_card()
+        self._clear_log()
+        self.f_prog.grid_remove()
+        self._strip_changed()
+        self._apply_way()
+        self._fill_found()
+        self._fill_kinds()
+        self._fill_ids()
+        self._goto_step(0)
+        self._refresh_all()
+        self.v_status.set("Started again. Nothing on disk was changed.")
+        return True
+
     def _home_open(self) -> None:
         self.v_listway.set(False)
         self._apply_way()
