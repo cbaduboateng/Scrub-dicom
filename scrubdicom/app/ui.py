@@ -173,6 +173,54 @@ def confirm_typed(parent, title: str, message: str, word: str = "YES") -> bool:
     return result["ok"]
 
 
+class ConfirmRun(tk.Toplevel):
+    """'Ready to anonymise?': one fact per row, room between them, two buttons. Replaces a system message box that
+    ran five lines and two long folder paths together."""
+
+    def __init__(self, parent, heading: str, rows: list[tuple[str, str, str]], note: str = "", ok_text: str = "Anonymise"):
+        super().__init__(parent)
+        self.title(APP_NAME)
+        self.transient(parent)
+        self.resizable(False, False)
+        self.result = False
+        f = ttk.Frame(self, padding=(28, 24, 28, 20))
+        f.pack(fill="both", expand=True)
+        ttk.Label(f, text=heading, font=("Helvetica Neue", 20, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 16))
+        self.rows: list[tuple[str, str]] = []
+        for i, (label, value, tip) in enumerate(rows, 1):
+            ttk.Label(f, text=label, style="Muted.TLabel").grid(row=i, column=0, sticky="nw", padx=(0, 24), pady=7)
+            v = ttk.Label(f, text=value, wraplength=400, justify="left", font=("Helvetica Neue", 14))
+            v.grid(row=i, column=1, sticky="w", pady=7)
+            if tip:
+                Tooltip(v, tip)
+            self.rows.append((label, value))
+        n = len(rows) + 1
+        if note:
+            ttk.Label(f, text=note, style="Muted.TLabel", wraplength=540, justify="left").grid(row=n, column=0, columnspan=2, sticky="w", pady=(14, 0))
+        b = ttk.Frame(f)
+        b.grid(row=n + 1, column=0, columnspan=2, sticky="e", pady=(22, 0))
+        self.b_ok = ttk.Button(b, text=ok_text, width=14, style=theme.style_or("Accent.TButton"), command=self._ok)
+        self.b_ok.pack(side="right", ipady=5)
+        self.b_cancel = ttk.Button(b, text="Not yet", width=10, command=self.destroy)
+        self.b_cancel.pack(side="right", padx=(0, 10), ipady=5)
+        self.bind("<Return>", lambda _e: self._ok())
+        self.bind("<Escape>", lambda _e: self.destroy())
+        self.update_idletasks()        # centre over the main window
+        x = parent.winfo_rootx() + max(0, (parent.winfo_width() - self.winfo_reqwidth()) // 2)
+        y = parent.winfo_rooty() + max(0, (parent.winfo_height() - self.winfo_reqheight()) // 3)
+        self.geometry(f"+{x}+{y}")
+        self.b_ok.focus_set()
+
+    def _ok(self) -> None:
+        self.result = True
+        self.destroy()
+
+    def wait(self) -> bool:
+        self.grab_set()
+        self.master.wait_window(self)
+        return self.result
+
+
 class Tooltip:
     """A small hover balloon; the hints live here instead of on the page."""
 
@@ -2050,10 +2098,43 @@ class App(tk.Tk):
         if not dry_run and not folder and self.previewed_key != self._spec_key():
             messagebox.showinfo("Preview first", "Run Preview first. It writes nothing and shows what would happen, so a wrong folder is caught before anything is written.")
             return
-        if not dry_run and self.demo_stage is None:
-            if not messagebox.askokcancel("Anonymise", self.v_summary.get() + "\n\nStart?"):
-                return
+        if not dry_run and self.demo_stage is None and not self._confirm_run():
+            return
         self._start_job("dry" if dry_run else "run", ["run", *spec.run_args()], None if dry_run else "run", "Preview" if dry_run else "Anonymisation")
+
+    def _confirm_rows(self) -> tuple[str, list[tuple[str, str, str]]]:
+        """(heading, [(label, value, full text for a tooltip)]) for the 'ready to anonymise?' window: what, how much,
+        what goes, and the two destinations with their paths shortened."""
+        s = self._spec()
+        prof = model.profile_for_path(s.profile)
+        kept = [KEPT_WORDS.get(k, k) for k in prof.kept_summary()]
+        removing = "Everything that identifies" if not kept else "Everything that identifies, except " + ", ".join(kept)
+        if self.v_way.get() == "folder" and self.intake:
+            it, pl = self.intake, self._plan()
+            n = len(it.units)
+            what = {"coronary": "Coronary CT only", "all": "Every series", "choose": "The series you ticked"}[self.v_choice.get()]
+            heading = f"Anonymise {n} {it.noun(n)}?"
+            rows = [("From", short_path(it.root), str(it.root)),
+                    ("Keeping", f"{what}: {pl.n_series} series, {pl.n_images:,} images", "")]
+            if pl.empty:
+                rows.append(("Skipping", f"{len(pl.empty)} with nothing to keep", ", ".join(pl.empty[:40])))
+        else:
+            if s.mode == "manifest":
+                n = model.manifest_count(s.manifest)
+                heading = f"Anonymise {n} patients?" if n is not None else "Anonymise the patients in the list?"
+                rows = [("From the list", short_path(s.manifest), s.manifest),
+                        ("Keeping", "Coronary CT only" if s.ctca_only else "Every series", "")]
+            else:
+                heading = "Anonymise the patients in this folder?"
+                rows = [("From", short_path(s.input), s.input), ("New IDs from", short_path(s.mapping), s.mapping)]
+        rows += [("Removing", removing, ""),
+                 ("Copies go to", short_path(s.output), s.output),
+                 ("The key goes to", short_path(s.confidential), s.confidential)]
+        return heading, rows
+
+    def _confirm_run(self) -> bool:
+        heading, rows = self._confirm_rows()
+        return ConfirmRun(self, heading, rows, "Your original scans are not changed.").wait()
 
     def _start_verify(self) -> None:
         out = self._out()

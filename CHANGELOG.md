@@ -33,6 +33,9 @@ Folder-first flow, after a live demo showed the first screen asked for lists and
   the record of what happened.
 - **Less engineering on screen.** The engine's log is behind an "Activity log" toggle; the progress line estimates
   the time left; a long run ends with a desktop notification (macOS, via the system's own osascript) or the bell.
+- **A confirmation you can read.** Pressing Anonymise opens a small window with a question as its heading and one
+  fact per row (from, keeping, removing, where the copies go, where the key goes), with folder paths shortened and
+  the full path in a tooltip. It replaces a system message box that ran five lines and two long paths together.
 - **Drag and drop.** A folder dropped anywhere on the window is opened like a chosen one (tkdnd through the
   `tkinterdnd2` package, MIT, hash-pinned; optional at run time: without it the Choose button is all there is).
 - The list-driven methods (patient-list CSV; folder plus ID spreadsheet) are unchanged behind "I already have a

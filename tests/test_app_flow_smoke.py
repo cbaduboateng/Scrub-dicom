@@ -175,6 +175,48 @@ def test_ids_prefix_rename_and_stability(app, scans):
     assert [u.new_id for u in app.intake.units] == ["SCAD-001", "My Case 7"], "Renumber never renames a patient already written"
 
 
+def test_the_confirmation_is_a_few_plain_rows(app, scans):
+    from scrubdicom.app import ui
+    app._open_folder(str(scans), wait=True)
+    heading, rows = app._confirm_rows()
+    assert heading == "Anonymise 2 patients?"
+    labels = [r[0] for r in rows]
+    assert labels == ["From", "Keeping", "Removing", "Copies go to", "The key goes to"]
+    by = {r[0]: r for r in rows}
+    assert by["Keeping"][1] == "Coronary CT only: 2 series, 240 images" and by["Removing"][1] == "Everything that identifies"
+    assert by["Copies go to"][1].startswith(".../") and by["Copies go to"][2] == app.v_output.get(), "short on screen, the full path in the tooltip"
+    assert all(len(r[1]) < 60 for r in rows), "no row is a wall of text"
+    # the window itself: built from those rows, Anonymise confirms, anything else does not
+    win = ui.ConfirmRun(app, heading, rows, "Your original scans are not changed.")
+    app.update()
+    assert win.rows == [(r[0], r[1]) for r in rows] and str(win.b_ok.cget("text")) == "Anonymise"
+    win.b_ok.invoke()
+    assert win.result is True and not win.winfo_exists()
+    win = ui.ConfirmRun(app, heading, rows)
+    app.update()
+    win.b_cancel.invoke()
+    assert win.result is False
+    # keeping something, and a study with nothing to keep, are both said
+    app.v_strip_choice.set("custom")
+    app.v_keep["keep_sex"].set(True)
+    app._strip_changed()
+    app.v_choice.set("choose")
+    app._choice_changed()
+    app.ticked = {next(k for k in app.kinds if k.modality == "US").key}
+    _, rows = app._confirm_rows()
+    by = {r[0]: r[1] for r in rows}
+    assert by["Removing"] == "Everything that identifies, except sex" and by["Skipping"] == "1 with nothing to keep"
+    app.v_strip_choice.set("default")
+    app._strip_changed()
+    # a real run asks; the answer decides
+    asked = []
+    app._confirm_run = lambda: asked.append(1) or False
+    app.v_choice.set("coronary")
+    app._choice_changed()
+    app._start_run()
+    assert asked == [1] and not (app.proc and app.proc.running), "declined: nothing starts"
+
+
 def test_output_inside_the_scans_is_refused(app, scans):
     app._open_folder(str(scans), wait=True)
     app.v_output.set(str(scans / "out"))
