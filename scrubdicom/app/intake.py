@@ -44,6 +44,7 @@ class FoundSeries:
     verdict: str            # keep | maybe | drop   (the coronary rule)
     reason: str
     review: str | None      # set when the engine would quarantine it for a human look
+    sample: Path | None = None   # one file of the series (the middle one where known), for a thumbnail
 
     @property
     def kind(self) -> tuple:
@@ -155,11 +156,13 @@ def scan_folder(root: Path | str, progress=None, cancelled=None) -> Intake:
         it.problems.append("That folder could not be opened.")
         return it
 
-    def add(h, count: int, d: Path) -> None:
+    def add(h, count: int, d: Path, sample: Path, middle: bool = False) -> None:
         pid, study, series = _ids(h)
         rel = d.relative_to(root)
         gkey = pid or ("\0" + (rel.parts[0] if rel.parts else ""))     # no Patient ID: group by top-level sub-folder
-        r = recs.setdefault((gkey, study, series), {"head": h, "count": 0, "dirs": set(), "pid": pid})
+        r = recs.setdefault((gkey, study, series), {"head": h, "count": 0, "dirs": set(), "pid": pid, "sample": sample})
+        if middle:
+            r["sample"] = sample
         r["count"] += count
         r["dirs"].add(d)
         it.n_files += count
@@ -182,7 +185,7 @@ def scan_folder(root: Path | str, progress=None, cancelled=None) -> Intake:
             n = len(names)
             heads = [_read(d / names[i]) for i in sorted({0, n // 4, n // 2, 3 * n // 4, n - 1})]
             if all(h is not None for h in heads) and len({_ids(h) for h in heads}) == 1:
-                add(heads[0], n, d)
+                add(heads[0], n, d, d / names[n // 2], middle=True)
                 if progress:
                     progress(it.n_files, len(recs))
                 continue
@@ -191,7 +194,7 @@ def scan_folder(root: Path | str, progress=None, cancelled=None) -> Intake:
             if h is None:
                 it.n_unreadable += 1
             else:
-                add(h, 1, d)
+                add(h, 1, d, d / fn)
             if progress and k % 100 == 0:
                 progress(it.n_files, len(recs))
                 if cancelled and cancelled():
@@ -219,7 +222,7 @@ def _series_of(rows: list[dict]) -> list[FoundSeries]:
         verdict, reason = classify_series(h, n)
         out.append(FoundSeries(uid=_ids(h)[2], number=str(h.get("SeriesNumber", "") or ""), description=str(h.get("SeriesDescription", "") or ""),
                                modality=str(h.get("Modality", "") or ""), thickness=thick, n_images=max(n, frames if n == 1 else 0),
-                               verdict=verdict, reason=reason, review=is_review_object(h)))
+                               verdict=verdict, reason=reason, review=is_review_object(h), sample=r.get("sample")))
     out.sort(key=lambda s: (float(s.number) if s.number.replace(".", "", 1).isdigit() else 1e9, s.description))
     return out
 
@@ -272,6 +275,8 @@ class Kind:
     maybe: int = 0
     review: str | None = None
     reason: str = ""
+    sample: Path | None = None      # a file to draw a thumbnail from: the largest series of this kind
+    _sample_n: int = 0
 
     @property
     def note(self) -> str:
@@ -299,6 +304,8 @@ def series_kinds(it: Intake) -> list[Kind]:
         for s in u.series:
             k = kinds.setdefault(s.kind, Kind(key=s.kind, modality=s.modality, description=s.description, thickness=s.thickness, reason=s.reason))
             k.n_images += s.n_images
+            if s.sample is not None and s.n_images > k._sample_n:
+                k.sample, k._sample_n = s.sample, s.n_images
             if s.kind not in seen:
                 seen.add(s.kind)
                 k.n_units += 1

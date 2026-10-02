@@ -33,6 +33,7 @@ from . import intake
 from . import model
 from . import theme
 from .model import APP_NAME, APP_VERSION, JobSpec, Settings
+from .plain import KEPT_WORDS
 from .profile_ui import ProfileEditor
 from scrubdicom.profiles import Profile
 from .runner import EngineProcess
@@ -63,8 +64,6 @@ KEEP_OPTIONS = (
     ("keep_institution", "Hospital name", "the output then names the centre"),
 )
 CUSTOM_PROFILE = "chosen_in_the_app.json"
-KEPT_WORDS = {"sex": "sex", "age5y": "a 5-year age band", "weight": "weight and height", "dates-shifted": "shifted dates",
-              "scanner": "the scanner make and model", "technical": "scanner technical details", "institution": "the hospital name"}
 DEST_PROBLEMS = ("Choose an output folder", "Choose a confidential folder", "The confidential folder must be outside",
                  "Output folder must not be", "Output folder is inside")
 HELP_STEPS = (

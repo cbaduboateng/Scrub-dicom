@@ -446,7 +446,7 @@ def is_pass_report(p: Path) -> bool:
         return False
 
 
-NOT_CONFIDENTIAL_PREFIXES = ("attestation_", "checksums_", "recheck_", "profile")
+NOT_CONFIDENTIAL_PREFIXES = ("attestation_", "checksums_", "recheck_", "profile", "certificate_")
 
 
 def confidential_log_files(logs: Path) -> list[Path]:
