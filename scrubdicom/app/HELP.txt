@@ -10,77 +10,76 @@ What it does
   This app never connects to the internet. It starts the same engine the command line uses, as a
   separate process, and shows you its output.
 
-The four tabs are the four steps, in order: Anonymise, Check series, Verify output, Share safely.
-The Dark / Light button in the header switches the look; it follows the system setting at first launch.
+The tabs run in order: Anonymise, Check series, Verify output, Share safely. The Dark / Light button in the header
+switches the look.
 
 HOME
-  Three buttons: Start (the guided flow), Try it on two sample patients, Viewer. "This session" shows the output
-  folder in use, how many patients are done and whether the check passed.
+  Open scans (choose a folder and start), See the demo, Viewer. "This session" shows the output folder in use, how
+  many patients are done and whether the check passed.
 
 THE STATUS STRIP
   The coloured strip under the header is the one thing to watch: Not started; Anonymising n of N; Anonymised, not
-  yet safe to hand over; Verified, safe to hand over; or Check failed, do not share. An orange line below it means
-  the chosen profile retains something (sex, shifted dates...) and the output is not fully blinded.
+  yet safe to hand over; Verified, safe to hand over; or Check failed, do not share. An amber line below it means
+  something is being kept in the output (sex, shifted dates...) and it is not fully blinded.
 
-FIRST TIME?  Home or Help > "Try it on two sample patients" runs the whole flow on built-in synthetic scans in
-  about twenty seconds. Nothing real is involved. The app opens clean each time: folders are not remembered.
+THE DEMO
+  Home or Help > "See the demo" loads two made-up patients into the ordinary four steps. Walk through them, or
+  press "Play it for me". Nothing real is involved and nothing outside the app's own folder is written.
 
-TAB 1  ANONYMISE
-  Three steps, one screen each; Next is available when the step is complete. Hover any "?" for the detail of a
-  field. Rarely needed ways and options are behind "More ways and options" on step 1.
+TAB 1  ANONYMISE: FOUR STEPS
+  Step 1  Open your scans
+    Choose the folder that holds the scans: one patient or a whole cohort. Every sub-folder is searched and only
+    headers are read; nothing in the folder is changed. The list shows each patient found, the Patient ID inside
+    the scans, and whether a coronary CT series was recognised.
+      One folder per patient (or per study)   each gets its own new ID. Two scans of the same patient in separate
+                                              folders are two studies with an ID each.
+      Several patients mixed in one folder    recognised by the Patient ID inside the scans instead of by folder.
+      A folder this app wrote earlier         skipped, so an old output is never anonymised twice.
+    "I already have a patient list (CSV) or an ID spreadsheet" shows the list-driven methods instead: a CSV of
+    source_folder, study_id; or one folder of patients plus a spreadsheet of old ID, new ID; or one patient with a
+    typed ID. Those keep their rarely needed options: drive path fix, already-analysed series, spreadsheet columns.
 
-  Step 1: where the scans are, and what each patient will be called. Three ways:
-    A list of patients (CSV)       Best for a cohort. A CSV with two columns: source_folder (the folder holding
-                                   that patient's scans, anywhere on any drive) and study_id (the new ID).
-                                   Can be stopped and resumed. Can keep only the coronary series.
-    One patient                    One folder of scans, one new ID typed in.
-    A folder of patients + an ID   One folder with a sub-folder per patient, plus a CSV or Excel sheet with an
-    spreadsheet                    old-ID column and a new-ID column. Say whether the old ID is the Patient ID
-                                   inside the scans or the sub-folder name. Column names are auto-detected;
-                                   fill them in only if the detection gets it wrong.
-    Already-analysed series        Optional CSV (study_id, series_uid, series_description) naming the series that
-                                   has already been analysed and must be the one kept. A thick pick falls back
-                                   to the thin coronary recon and the patient is flagged "needs a look".
-    Drive path fix                 Only when the patient list was written on another computer, e.g. a Mac list
-                                   run on Windows: /Volumes/Drive=E:\  rewrites every folder that starts with
-                                   /Volumes/Drive.
+  Step 2  Which scans do you want?
+      Coronary CT only   the thin contrast coronary reconstructions (0.8 mm or thinner, 100 images or more, cardiac
+                         field of view). Scouts, calcium scores, chest recons, X-rays and reports are left out.
+      Everything         every series is anonymised. Types that often carry burned-in text (X-ray, ultrasound,
+                         angiography, reports) are still set aside in _review for a look.
+      Let me choose      tick the kinds of series to keep. A "kind" is the same modality, description and slice
+                         thickness across the patients, so one tick applies to the whole cohort.
+    The line under the list says what would be kept. "Look at the images" opens the viewer, where the series of one
+    patient can be ticked by hand; that patient's ticks then win over the choice here.
 
-  Step 2: two folders. The OUTPUT folder gets only anonymised files and can be handed over. The CONFIDENTIAL
-  folder gets the linkage log (study ID -> patient), the UID salt and the run logs; it must be outside the output
-  folder (Suggest proposes one) and never leaves you. Ideally a different, encrypted drive.
+  Step 3  What should be removed?
+      Everything that identifies       the default, and what a blinded read needs.
+      Everything, except what I tick   sex; age as a 5-year band; weight and height; dates moved by a secret
+                                       per-patient number of days; scanner make and model; scanner technical
+                                       details; hospital name. These are the options DICOM PS3.15 allows.
+      Use a saved profile              the built-in profiles and your own; "Edit" also sets what the patient name,
+                                       study description and method text become.
+    Always removed, whatever is chosen: names, date of birth, hospital and NHS numbers, addresses, doctors' names,
+    accession numbers, comments, private vendor tags and the original UIDs. The choice is written into every file
+    and into _logs/profile.json, and the check verifies the output against it.
 
-  Step 3: review and go. The profile, the switches, a plain-English summary of what is about to happen, and the buttons.
-  Options:
-    Keep only the coronary CT angiogram series   drops scouts, calcium score, chest recons, lung/sharp kernels,
-                                                 MPRs and dose reports. Every decision is shown on tab 2.
-    Skip patients already done (resume)          leave on. Half-finished patients are redone.
-    Keep scanner technical details               kernel and scan options. Leave OFF for a blinded read: a kernel
-                                                 name identifies the scanner make.
-    One folder per patient                       no per-series sub-folders.
-    Check the output automatically when done     leave on.
+  Step 4  Save and go
+      New IDs            numbered from the prefix you type (ANON-001, ANON-002...). Double-click one to change it,
+                         or "Fill from a spreadsheet" (old ID, new ID; the old ID may be the Patient ID inside the
+                         scans or the folder name). Open the same folder again with the same two destination
+                         folders and every patient keeps the ID it had.
+      Anonymised copies  the output folder: one folder per new ID. Only anonymised files and the verification
+                         record go here; it can be handed over.
+      Confidential key   the folder for the list linking each new ID to the real patient, the UID salt and every
+                         log. It must be outside the output folder and never leaves you.
+      Switches           Check the output when done (leave on). Skip patients already done (leave on: a stopped
+                         run carries on; half-finished patients are redone). More > "Show the rarely needed
+                         options" adds: keep scanner technical details, no series sub-folders.
+      Anonymise          asks once, then runs. The bar shows patient n of N and the files written.
+      Preview            a dry run: reads everything and reports what would be written, writes nothing.
+      Stop               ends the run cleanly. The patient in progress is redone next time.
+      Open viewer        the built-in DICOM viewer (below).
+    If something goes wrong a card appears above the steps with one button: Resume after a drive disconnects, Open
+    report after a failed check.
 
-  De-identification profile   what to keep beyond the default. "Blinded read" (the default) removes everything
-                              identifying. Other profiles may keep sex, a 5-year age bucket, weight/height, dates
-                              shifted by a secret per-patient offset, scanner make/model, technical fields, or the
-                              institution name, and may set the patient name, study description and method text.
-                              Private tags, UIDs, physicians, accession numbers, comments and addresses are always
-                              removed. "Edit profiles..." copies a built-in and lets you tick what you need. The
-                              profile is written into every file and into _logs/profile.json; Verify checks the
-                              output against it.
-
-  Buttons
-    Preview        scans and reports what would be written; writes nothing. Anonymise stays disabled until Preview
-                   has run with the same settings, so a wrong folder is caught before anything is written.
-    Anonymise      shows the exact command, then runs it. The bar shows patient n of N and the time left; the
-                   activity log updates live.
-    Stop           ends the run cleanly. The patient in progress is redone next time.
-    Open viewer    the built-in DICOM viewer (see below).
-    More           show the command line (so a colleague can reproduce the run), open the output folder or the
-                   log file, copy the log, show skipped patients in the log.
-    If something goes wrong a card appears with one button: Resume after a drive disconnects, Open report after a
-    failed check, Go to step 1 when folders in the list were not found.
-
-THE VIEWER  (button "Preview a patient in the viewer..." on tab 1; "Open patient in viewer" on tab 2;
+THE VIEWER  ("Look at the images" on step 2 and "Open viewer" on step 4; "Open patient in viewer" on tab 2;
              "Review and redact quarantined files" on tab 4)
   Two views of the same window:
     Original scans     what Anonymise WILL do, computed in memory: every series with its keep/drop decision and a
@@ -93,7 +92,7 @@ THE VIEWER  (button "Preview a patient in the viewer..." on tab 1; "Open patient
   Tick boxes: in the "Original scans" view every series has a "Use" tick. The rule's choices start ticked. Tick
   or untick what you want, press "Anonymise only the ticked series", and the run keeps exactly those for that
   patient (other patients are unaffected). "Let the rule decide" clears it. The ticks are saved in the
-  confidential folder (series_selection.csv) and the step-3 summary says how many patients have ticks.
+  confidential folder (series_selection.csv) and steps 2 and 4 say which patients have ticks of their own.
   Viewing: mouse wheel or arrow keys scroll slices. The "Mouse drag" switch sets what a drag does: window/level,
   zoom, or pan. The Zoom slider, the + and - buttons, cmd/ctrl + wheel and 1:1 / Fit all zoom; double-click = fit;
   right-drag always pans; space = cine. kVp, mAs and CTDIvol are shown in the series list and bottom right. Presets for coronary, soft tissue,
@@ -131,7 +130,7 @@ ACTIONS MENU
   are redone                                         with "Skip patients already done" redoes them. Asks first.
 
 IF THE DRIVE DISCONNECTS
-  The run stops by itself. Reconnect the drive, tick "Skip patients already done", click Anonymise.
+  The run stops by itself. Reconnect the drive, leave "Skip patients already done" on, click Anonymise.
 
 IF NOTHING HAPPENS FOR MINUTES ON ONE FILE
   The log names the file. A failing drive is hanging on it. Stop, add the full path of that file to a

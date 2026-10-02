@@ -36,19 +36,40 @@ def clipped(top):
     return out
 
 app = App(offer_demo=False); app.settings = Settings.load(S / "settings_shot.json")
-app.geometry("1000x760+30+30"); app.update()
+app.geometry("1040x800+30+30"); app.update()
 report = []
-# main window: every tab, every step, every mode, with "more" on and off
+# main window: every tab; then the folder-first flow, empty and with the demo patients loaded; then the list-driven methods
 for tab, name in ((app.tab_home, "home"), (app.tab_series, "series"), (app.tab_verify, "verify"), (app.tab_share, "share"), (app.tab_help, "help")):
     app.nb.select(tab); app.update(); r = clipped(app)
     if r: report.append(f"[main/{name}]"); report += r
 app.nb.select(app.tab_run)
+N_STEPS = len(app.steps)
+for step in range(N_STEPS):
+    app._show_step(step); app.update(); r = clipped(app)
+    if r: report.append(f"[main/run folder-first empty step={step+1}]"); report += r
+from scrubdicom import demo_data
+demo_data.main(S / "demo_scans")
+app._open_folder(str(S / "demo_scans"), wait=True)
+for choice in ("coronary", "choose"):
+    app.v_choice.set(choice); app._choice_changed()
+    for strip in ("default", "custom"):
+        app.v_strip_choice.set(strip); app._strip_changed()
+        for step in range(N_STEPS):
+            app._show_step(step); app.update(); r = clipped(app)
+            if r: report.append(f"[main/run folder-first demo choice={choice} remove={strip} step={step+1}]"); report += r
+app.v_strip_choice.set("default"); app._strip_changed()
+app._show_card("A card", "With a card showing above the steps, the buttons of the last step must still be inside the window. " * 2, "Button", lambda: None, "Second", lambda: None)
+for step in range(N_STEPS):
+    app._show_step(step); app.update(); r = [x for x in clipped(app) if "Text" not in x.split()[0]]
+    if r: report.append(f"[main/run folder-first with card step={step+1}]"); report += r
+app._hide_card()
+app.v_listway.set(True); app._apply_way()
 for mode in model.MODES:
     for more in (False, True):
         app.v_mode.set(mode); app.v_more.set(more); app._apply_mode()
-        for step in range(3):
+        for step in range(N_STEPS):
             app._show_step(step); app.update(); r = clipped(app)
-            if r: report.append(f"[main/run mode={mode} more={more} step={step+1}]"); report += r
+            if r: report.append(f"[main/run list mode={mode} more={more} step={step+1}]"); report += r
 # with data: output set so cards/tables fill
 app.v_mode.set("manifest"); app._apply_mode(); app.v_manifest.set(str(S / "manifest.csv")); app.v_output.set(str(S / "out1")); app.update(); app._refresh_all()
 for tab, name in ((app.tab_series, "series+data"), (app.tab_verify, "verify+data"), (app.tab_share, "share+data")):

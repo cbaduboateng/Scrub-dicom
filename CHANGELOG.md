@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.7.0 (2026-10-02)
+Folder-first flow, after a live demo showed the first screen asked for lists and spreadsheets before a folder.
+- **Open a folder.** The Anonymise tab is now four plain steps: Open your scans, Which scans do you want?, What
+  should be removed?, Save and go. Step 1 is one button. The app reads the headers under the folder (on a worker
+  thread, with progress and a Stop button), lists the patients it found and says whether each has a coronary CT
+  series. One folder per patient or per study gets an ID each; patients mixed in one folder are recognised by the
+  Patient ID inside the scans; an earlier output of this app inside the folder is skipped.
+- **Choose the scans.** Coronary CT only, Everything, or Let me choose: a list of the kinds of series across the
+  cohort (modality, description, slice thickness, how many patients have it) with a tick each, so "only the coronary
+  series, not the screening X-ray" is one click for a thousand patients. The viewer's per-patient ticks still win.
+- **Choose what to remove.** Everything identifying (default), or tick what to keep (sex, 5-year age band, weight and
+  height, shifted dates, scanner, technical details, hospital name) on the same screen, or a saved profile.
+- **Save and go.** New IDs are numbered from a prefix, editable by double-click or filled from a spreadsheet, and
+  stable across sessions: re-opening a folder with the same destination folders gives every patient the ID it had.
+  The two destination folders are suggested next to the opened folder under names that never include its name.
+  Anonymise no longer needs a separate Preview first in this flow: the scan and the series list are the preview.
+- The list-driven methods (patient-list CSV, folder plus ID spreadsheet, one patient) are unchanged behind
+  "I already have a patient list (CSV) or an ID spreadsheet" on step 1.
+- **Demo.** Two made-up patients with a drawn chest CT (scout, calcium score, 120-slice coronary series), a chest
+  X-ray, a dose report and an echo frame, loaded into the ordinary four steps with a "Play it for me" button. The
+  old demo printed a dry run of eight noise images into the log.
+- **Help.** The 139-line reference is replaced on the Help tab by the four steps and nine short questions; the
+  reference is one click away (Help > Full reference).
+- The window's own run log now goes to the confidential folder, not the output's `_logs`, so a clean run ends
+  "Verified. Safe to hand over." without a detour through "Move confidential logs out".
+- New `scrubdicom/app/intake.py` (scan, kinds, IDs, the files the engine reads; no Tk; 18 tests) and
+  `scrubdicom/demo_data.py`. The engine is unchanged apart from the version number.
+
 ## 0.6.1 (2026-09-21)
 First Windows build, and two Windows fixes found by CI.
 - Windows: first packaged build (`Scrub-DICOM-<version>-windows-x64.zip` and a per-user `-setup.exe`), produced on

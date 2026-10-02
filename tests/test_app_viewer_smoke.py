@@ -34,7 +34,8 @@ def app(data, tmp_path):
     a.settings = Settings.load(tmp_path / "settings.json")
     d, out, m = data
     a.v_mode.set("manifest")
-    a._apply_mode()
+    a.v_listway.set(True)
+    a._apply_way()
     a.v_manifest.set(str(m))
     a.v_output.set(str(out))
     a.update()
@@ -135,7 +136,7 @@ def test_viewer_source_mode_end_to_end(app, data):
     w._use_ticked()                        # saves, closes the viewer, and counts as the preview
     sel_path = Path(conf) / "series_selection.csv"
     assert sel_path.exists() and "CBB0701" in sel_path.read_text() and app.v_series_select.get() == str(sel_path)
-    assert not w.winfo_exists() and app.previewed_key == app._spec_key() and app.step == 2
+    assert not w.winfo_exists() and app.previewed_key == app._spec_key() and app.step == len(app.steps) - 1
     assert "only the ticked series for 1 patient" in app._summary_text([])
 
 

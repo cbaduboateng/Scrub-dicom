@@ -31,7 +31,7 @@ the app (macOS) or use Add/Remove Programs (Windows).
 
 ## Home
 
-The first tab. Three buttons: **Start** (the guided flow), **Try it on two sample patients**, and
+The first tab. Three buttons: **Open scans** (choose a folder and start), **See the demo**, and
 **Viewer**. "This session" shows the output folder in use, how many patients are done and whether the
 check passed, with **Continue**, **Share safely** and **Open output folder**. The app opens clean each
 time; folders are not remembered between launches.
@@ -40,84 +40,90 @@ time; folders are not remembered between launches.
 
 The coloured strip under the header is the one thing to watch, on every tab: **Not started**,
 **Anonymising n of N**, **Anonymised, not yet safe to hand over**, **Verified, safe to hand over**, or
-**Check failed, do not share**. An orange line below it means the chosen profile retains something and
-the output is not fully blinded.
+**Check failed, do not share**. An amber line below it means something is being kept in the output and
+it is not fully blinded.
 
-## First time? Try the demo
+## First time? See the demo
 
-Home or Help > **Try it on two sample patients** runs the whole flow on built-in
-synthetic scans in about twenty seconds: preview, anonymise, check. Nothing real is involved and
-nothing outside the app's own folder is written.
+Home or Help > **See the demo** loads two made-up patients into the ordinary four steps. Their folders are named
+after them and their scans carry names, dates of birth and hospital numbers, so you can watch those disappear.
+Walk through the steps yourself or press **Play it for me**. Nothing real is involved and nothing outside the
+app's own folder is written.
 
-## The four steps
+## The tabs
 
-The tabs are numbered in the order you use them. The **Dark / Light** button in the header switches the
-look; the app follows the system appearance at first launch. Under the buttons on the first tab a line
-tells you what is still missing, and Anonymise becomes available when the form is complete.
+The tabs are numbered in the order you use them. The **Dark / Light** button in the header switches the look.
 
 ### 1  Anonymise
 
-Three steps, one screen each, with **Next** available once the step is complete. Hover any **?** for the
-detail of a field. Rarely needed ways and options sit behind **More ways and options** on step 1.
+Four steps, one screen each. **Next** becomes available when a step is complete, and a line under the steps says
+what is still missing.
 
-**Step 1: where the scans are, and what each patient will be called.**
+**Step 1: Open your scans.** Press **Choose folder** and pick the folder that holds the scans: one patient or a
+whole cohort. Every sub-folder is searched. Only headers are read and nothing in the folder is changed. The list
+shows each patient found, the Patient ID inside the scans and whether a coronary CT series was recognised.
+
+| The folder holds | What happens |
+|---|---|
+| One folder per patient, or per study | Each gets its own new ID. Two scans of one patient in separate folders are two studies, each with an ID. |
+| Several patients' files mixed in one folder | They are told apart by the Patient ID inside the scans. |
+| An earlier output of this app | Skipped, so nothing is anonymised twice. |
+
+If you already have a patient-list CSV or an ID spreadsheet, tick **I already have a patient list (CSV) or an ID
+spreadsheet** to use the list-driven methods instead:
 
 | Choose | When |
 |---|---|
-| **A list of patients (CSV)** | Most cohorts. A CSV with two columns, `source_folder` (the folder holding that patient's scans) and `study_id` (the new ID). Folders can be on different drives. Can be stopped and resumed, and can keep only the coronary series. |
-| **One patient** | A single case. Type the new ID. |
-| **A folder of patients + an ID spreadsheet** | One folder with a sub-folder per patient and a CSV or Excel sheet with an old-ID column and a new-ID column. Say whether the old ID is the Patient ID inside the scans or the sub-folder name. |
+| **A list of patients (CSV)** | A CSV with two columns, `source_folder` and `study_id`. Folders can be on different drives. |
+| **One patient** | A single folder and a typed ID. |
+| **A folder of patients + an ID spreadsheet** | One folder with a sub-folder per patient and a CSV or Excel sheet with an old-ID column and a new-ID column. |
 
-**Step 2: where the anonymised copies go, and where the confidential material goes.** Two folders. The
-**output folder** receives only anonymised files and non-confidential logs and can be handed over. The
-**confidential folder** receives the linkage log (study ID to patient), the UID salt and the run logs; it
-must be outside the output folder (**Suggest** proposes a sibling folder) and it never leaves you. Ideally
-put it on a different, encrypted drive. A different drive from the scans, or at least a
-folder outside them. It will contain one folder per patient, named by new ID, plus `_logs` and
-`_review`.
+**Step 2: Which scans do you want?**
 
-**Step 3: review and go.** The profile, the switches, a plain-English summary of what is about to happen,
-and the buttons.
+- **Coronary CT only**: the thin contrast coronary reconstructions. Scouts, calcium scores, chest recons, X-rays
+  and reports are left out. Every decision is listed afterwards on tab 2.
+- **Everything**: every series is anonymised. Types that often carry burned-in text (X-ray, ultrasound,
+  angiography, reports) are still set aside in `_review` for you to look at.
+- **Let me choose**: tick the kinds of series to keep. A kind is the same modality, description and slice thickness
+  across the patients, so one tick applies to the whole cohort.
 
-- **Keep only the coronary CT angiogram series** (on by default): drops scouts, calcium score runs,
-  chest recons, lung/sharp kernels, MPRs and dose reports. Every decision is shown on tab 2.
-- **Skip patients already done (resume)**: leave on. Half-finished patients are redone.
-- **Keep scanner technical details**: kernel and scan options. Leave off for a blinded read, because
-  a kernel name identifies the scanner make.
-- **One folder per patient, no series sub-folders**.
-- **Check output when done** (under Advanced, on by default): runs the verify step after the run. It
-  reads headers only, so it is safe on any cohort size; allow a few minutes per 100 patients.
+The line under the list says what would be kept. **Look at the images** opens the viewer, where the series of one
+patient can be ticked by hand; that patient's own ticks then win over the choice on this step.
 
-**De-identification profile.** "Blinded read" (the default) removes everything identifying and is the
-policy validated on the 520-study cohort. Other profiles keep a little more when a study needs it:
+**Step 3: What should be removed?**
 
-| Profile | Keeps |
-|---|---|
-| Blinded read (default) | nothing |
-| Longitudinal follow-up | sex, age in 5-year buckets, dates shifted by a secret per-patient offset so intervals survive |
-| Blinded read + patient characteristics | sex, 5-year age bucket, weight and height |
-| Blinded read + scanner and technical | scanner make and model, kernel and scan options |
+- **Everything that identifies the patient, the hospital or the scanner** (the default, and the policy validated on
+  the 520-study cohort).
+- **Everything, except what I tick here**: sex; age as a 5-year band; weight and height; dates moved by a secret
+  per-patient number of days; scanner make and model; scanner technical details; hospital name. These are the
+  options DICOM PS3.15 allows. An amber line appears under the status strip while anything is kept.
+- **Use a saved profile**: the built-in profiles and your own. **Edit** also sets what the patient name, study
+  description and method text become.
 
-**Edit profiles...** lets you copy a built-in profile and tick exactly what to keep, and set what the
-patient name, study description and method text become. Whatever you tick, private tags, original UIDs,
-physician names, accession and order numbers, comments and addresses are always removed. The profile
-is written into every file (DeidentificationMethod) and into `_logs/profile.json`, and the output check
-verifies against it, so a reader can tell what was retained. The viewer's header before/after follows
-the chosen profile.
+Whatever you choose, names, date of birth, hospital and NHS numbers, addresses, doctors' names, accession numbers,
+comments, private vendor tags and the original UIDs are always removed. The choice is written into every file
+(DeidentificationMethod) and into `_logs/profile.json`, and the output check verifies against it.
 
-Buttons:
+**Step 4: Save and go.**
 
-- **Preview**: scans and reports what would be written; writes nothing. **Anonymise stays disabled until
-  Preview has run with the same settings**, so a wrong folder is caught before anything is written.
-- **Anonymise**: shows you the exact command it is about to run, then runs it. The bar shows
-  "Patient n of N" with an estimate of time left; the activity log updates live.
-- **Stop**: ends the run cleanly. The patient in progress is redone next time.
-- **Open viewer**: the built-in DICOM viewer.
-- **More**: show the command line so a colleague can reproduce the run, open the output folder or the
-  log file, copy the log.
-- If something goes wrong, a card appears with one button: **Resume** after a drive disconnects, **Open
-  report** after a failed check, **Go to step 1** when folders in the list were not found. Removing thick
-  studies or releasing a file from quarantine without redaction asks you to type YES.
+- **New IDs** are numbered from the prefix you type (`ANON-001`, `ANON-002`...). Double-click an ID to change it,
+  or press **Fill from a spreadsheet** (old ID, new ID; the old ID may be the Patient ID inside the scans or the
+  folder name). If you open the same folder again with the same two destination folders, every patient keeps the
+  ID it had and new patients are numbered after the last one.
+- **Anonymised copies go to** the output folder: one folder per new ID. Only anonymised files and the verification
+  record go here, so it can be handed over.
+- **The confidential key goes to** a second folder: the list linking each new ID to the real patient, the UID salt
+  and every log. It must be outside the output folder and it never leaves you. Both folders are suggested next to
+  the folder you opened, under names that never include that folder's name.
+- **Check the output when done** and **Skip patients already done**: leave both on.
+- **Anonymise** asks once, then runs. The bar shows "patient n of N" and the files written.
+- **Preview** is a dry run: it reads everything and reports what would be written, and writes nothing.
+- **Stop** ends the run cleanly. The patient in progress is redone next time.
+- **More**: show the command line so a colleague can reproduce the run, open the output folder or the log file,
+  copy the log, show the rarely needed options (keep scanner technical details, no series sub-folders).
+- If something goes wrong a card appears above the steps with one button: **Resume** after a drive disconnects,
+  **Open report** after a failed check. Removing thick studies or releasing a file from quarantine without
+  redaction asks you to type YES.
 
 The computer is kept awake for the length of the run. Leave a laptop open and plugged in.
 
@@ -188,7 +194,8 @@ number.
 
 ### Help
 
-This guide in short form, plus the version and licence.
+The four steps, nine common questions with short answers, and **See the demo**. **Full reference** opens the long
+version of this guide in its own window.
 
 ## Actions menu
 

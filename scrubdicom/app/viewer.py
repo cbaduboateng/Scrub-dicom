@@ -466,6 +466,8 @@ class ViewerWindow(tk.Toplevel):
                     pass
                 self.app.v_series_select.set("")
         self.ticks_saved = False
+        if hasattr(self.app, "ticks_cleared"):
+            self.app.ticks_cleared(self._study_id())
         self._show_series(self.series)
         self.v_status.set("Selection cleared for this patient; the rule decides again.")
 
