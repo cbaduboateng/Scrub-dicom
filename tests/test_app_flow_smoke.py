@@ -1,5 +1,6 @@
 """Drive the main window through the folder-first flow on the demo patients: open a folder, choose kinds of series,
 choose what to keep, rename, and check the engine command the window builds. Skipped when no display is available."""
+import gc
 import time
 import tkinter as tk
 from pathlib import Path
@@ -8,6 +9,8 @@ import pytest
 
 from scrubdicom import demo_data
 from scrubdicom.app import intake, model
+
+SAVE_STEP, DONE_STEP = 3, 4
 from scrubdicom.app.model import Settings
 
 
@@ -33,6 +36,10 @@ def app(tmp_path, monkeypatch):
     a.dialogs = dialogs
     yield a
     a.destroy()
+    a = None
+    # Finalise this window's Tk variables here, on the main thread. Left for later, the collector may run inside a
+    # worker thread of the next test, where each variable waits a second for a main loop that tests never start.
+    gc.collect()
 
 
 def pump(a, seconds=60.0, until=None):
@@ -82,7 +89,7 @@ def test_one_patient_chosen_but_the_folder_holds_several(app, scans):
     app.v_cases.set("one")
     app._apply_way()
     app._open_folder(str(scans / "SMITH_JOHN_1234567"), wait=True)
-    app._goto_step(len(app.steps) - 1)
+    app._goto_step(SAVE_STEP)
     app.update()
     assert not app._problems_by_step()[0] and app.f_one.winfo_ismapped() and not app.f_many.winfo_ismapped()
     app.v_one_id.set("Case 12")
@@ -184,7 +191,7 @@ def test_viewer_ticks_for_one_patient_win_and_can_be_cleared(app, scans):
     topo = next(s for s in w.series if s.description.startswith("Topogram"))
     w.ticked = {topo.uid}
     w._use_ticked()
-    assert app.overrides == {"ANON-001": {topo.uid}} and app.step == len(app.steps) - 1
+    assert app.overrides == {"ANON-001": {topo.uid}} and app.step == SAVE_STEP
     spec = app._spec()
     assert spec.ctca_only and spec.series_select.endswith(intake.SELECTION), "the rule for everyone else, the ticks for this patient"
     assert "ticked in the viewer" in app.tv_ids.set("0", "keeps")
@@ -198,7 +205,14 @@ def test_demo_plays_to_a_verified_green_finish(app):
     out = app._out()
     assert model.verify_status(out / "_logs")[0] == "PASS"
     assert app.v_strip.get() == "Verified. Safe to hand over."
-    assert app.v_card_title.get().startswith("Demo complete")
+    # the journey ends on the results screen: one headline, the certificate written, the example of what was removed
+    assert app.step == DONE_STEP and app.v_done_head.get() == "2 patients anonymised and verified"
+    assert "240 files" in app.v_done_detail.get() and not app.f_issues.winfo_children()
+    assert app.b_done_hand.instate(["!disabled"]) and app.b_done_cert.instate(["!disabled"]) and app.b_done_view.instate(["!disabled"])
+    certs = list((out / "_logs").glob("certificate_*.pdf"))
+    assert len(certs) == 1 and certs[0].read_bytes().startswith(b"%PDF")
+    assert app.card_done.winfo_ismapped() and app.card_done.v_title.get().startswith("What was removed, shown on DEMO-00")
+    assert not app.f_log.winfo_ismapped(), "the engine's log stays out of sight unless asked for"
     assert sum(1 for _ in (out / "DEMO-001").rglob("*.dcm")) == 120
     names = {p.name.split("_2")[0] for p in (out / "_logs").iterdir()}
     assert not any(n.startswith("app") for n in names), "the window's own run log goes to the confidential folder"

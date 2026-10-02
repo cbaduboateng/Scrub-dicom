@@ -263,3 +263,56 @@ def test_parse_start_and_heartbeat():
     assert model.parse_start("[3/12] P3 <- H1: 224 files, 1 series") is None
     assert model.parse_heartbeat("  P3: 200 files...") == ("P3", 200)
     assert model.parse_heartbeat("[1/2] P3: starting") is None
+
+
+# ------------------------------------------------------------------ results screen, time left, notifications
+
+def test_done_state_walks_from_nothing_to_verified(tmp_path):
+    out = tmp_path / "out"
+    assert model.done_state(None).level == "none" and model.done_state(out).level == "none"
+    (out / "_logs").mkdir(parents=True)
+    assert model.done_state(out).headline == "Nothing has been anonymised yet"
+    (out / "P1").mkdir()
+    (out / "P1" / ".complete").write_text("")
+    (out / "P2").mkdir()                                              # half-finished
+    st = model.done_state(out)
+    assert st.level == "warn" and st.headline == "1 patient anonymised, not yet checked" and not st.verified
+    assert [i.action for i in st.issues] == ["verify", ""] and "unfinished" in st.issues[1].text
+    (out / "_logs" / "verify_20260101_000000.txt").write_text("Verified 12 files\n\nPASS: clean\n")
+    (out / "_logs" / "attestation_20260101_000000.json").write_text('{"output": {"files_verified": 12}}')
+    import shutil
+    shutil.rmtree(out / "P2")
+    st = model.done_state(out)
+    assert (st.level, st.headline, st.detail) == ("ok", "1 patient anonymised and verified", "12 files, every one re-read and found clean.")
+    assert st.verified and st.can_hand_over and st.files == 12 and st.patients == 1 and not st.issues
+    # held-back files and stray logs are listed, each with the button that deals with it; the headline stays honest
+    (out / "_review" / "P1").mkdir(parents=True)
+    (out / "_review" / "P1" / "x.dcm").write_text("x")
+    (out / "_logs" / "files_20260101.csv").write_text("x")
+    import os
+    old_time = (out / "_logs" / "verify_20260101_000000.txt").stat().st_mtime - 100       # a run log from before the check
+    os.utime(out / "_logs" / "files_20260101.csv", (old_time, old_time))
+    st = model.done_state(out)
+    assert st.level == "ok" and [i.action for i in st.issues] == ["review", "move_logs"] and "1 file was held back" in st.issues[0].text
+    (out / "_logs" / "LINKAGE_20260101_CONFIDENTIAL.csv").write_text("x")
+    st = model.done_state(out)
+    assert not st.can_hand_over and "confidential key is inside" in st.issues[1].text
+    (out / "_logs" / "verify_20260102_000000.txt").write_text("FAIL: 2 problems\n")
+    st = model.done_state(out)
+    assert st.level == "error" and st.headline == "Check failed: do not share" and st.issues[0].action == "report" and not st.can_hand_over
+
+
+def test_eta_text():
+    assert model.eta_text(3, 0.5) == "" and model.eta_text(60, 0.01) == "" and model.eta_text(60, 1.0) == ""
+    assert model.eta_text(30, 0.5) == "under a minute left"
+    assert model.eta_text(60, 0.25) == "about 3 min left"
+    assert model.eta_text(3600, 0.25) == "about 3 h 00 min left"
+
+
+def test_notification_command_cannot_be_broken_out_of(monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    cmd = model.notify_command('Scrub-DICOM', 'Done "now"\nand \\ more')
+    assert cmd[:2] == ["osascript", "-e"] and cmd[2].count('"') == 4, "quotes in the text cannot end the string early"
+    assert "\n" not in cmd[2] and "\\" not in cmd[2]
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert model.notify_command("a", "b") is None

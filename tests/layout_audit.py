@@ -39,9 +39,12 @@ app = App(offer_demo=False); app.settings = Settings.load(S / "settings_shot.jso
 app.geometry("1040x800+30+30"); app.update()
 report = []
 # main window: every tab; then the folder-first flow, empty and with the demo patients loaded; then the list-driven methods
-for tab, name in ((app.tab_home, "home"), (app.tab_series, "series"), (app.tab_verify, "verify"), (app.tab_share, "share"), (app.tab_help, "help")):
+for tab, name in ((app.tab_home, "home"), (app.tab_help, "help")):
     app.nb.select(tab); app.update(); r = clipped(app)
     if r: report.append(f"[main/{name}]"); report += r
+for which in ("series", "verify", "share"):
+    app._show_details(which); app.update(); r = clipped(app)
+    if r: report.append(f"[details/{which} empty]"); report += r
 app.nb.select(app.tab_run)
 N_STEPS = len(app.steps)
 for cases in ("", "one", "many"):
@@ -78,9 +81,14 @@ for mode in model.MODES:
             if r: report.append(f"[main/run list mode={mode} more={more} step={step+1}]"); report += r
 # with data: output set so cards/tables fill
 app.v_mode.set("manifest"); app._apply_mode(); app.v_manifest.set(str(S / "manifest.csv")); app.v_output.set(str(S / "out1")); app.update(); app._refresh_all()
-for tab, name in ((app.tab_series, "series+data"), (app.tab_verify, "verify+data"), (app.tab_share, "share+data")):
-    app.nb.select(tab); app.update(); r = clipped(app)
-    if r: report.append(f"[main/{name}]"); report += r
+for which in ("series", "verify", "share"):
+    app._show_details(which); app.update(); r = clipped(app)
+    if r: report.append(f"[details/{which}+data]"); report += r
+app.nb.select(app.tab_run); app._show_step(4); app.update(); r = clipped(app)          # the results screen on a verified output
+if r: report.append("[main/run done+data]"); report += r
+app.v_show_log.set(True); app._toggle_log(); app.update(); r = clipped(app)
+if r: report.append("[main/run done+data+log]"); report += r
+app.v_show_log.set(False); app._toggle_log()
 # viewer, both modes, at its minimum size, with series loaded
 for mode in ("source", "output"):
     w = ViewerWindow(app, mode, "CBB0401"); w.geometry("1280x740+30+30")

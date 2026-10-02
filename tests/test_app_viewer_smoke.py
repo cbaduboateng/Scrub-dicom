@@ -3,6 +3,7 @@ step slices, zoom, reformat, window presets, header diff, then output mode with 
 display is available (headless CI)."""
 import subprocess
 import sys
+import gc
 import time
 import tkinter as tk
 from pathlib import Path
@@ -41,6 +42,10 @@ def app(data, tmp_path):
     a.update()
     yield a
     a.destroy()
+    a = None
+    # Finalise this window's Tk variables here, on the main thread. Left for later, the collector may run inside a
+    # worker thread of the next test, where each variable waits a second for a main loop that tests never start.
+    gc.collect()
 
 
 def pump(widget, seconds=6.0, until=None):
@@ -136,7 +141,7 @@ def test_viewer_source_mode_end_to_end(app, data):
     w._use_ticked()                        # saves, closes the viewer, and counts as the preview
     sel_path = Path(conf) / "series_selection.csv"
     assert sel_path.exists() and "CBB0701" in sel_path.read_text() and app.v_series_select.get() == str(sel_path)
-    assert not w.winfo_exists() and app.previewed_key == app._spec_key() and app.step == len(app.steps) - 1
+    assert not w.winfo_exists() and app.previewed_key == app._spec_key() and app.step == 3
     assert "only the ticked series for 1 patient" in app._summary_text([])
 
 

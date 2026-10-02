@@ -26,11 +26,14 @@ import threading
 import time
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 from . import brand
+from . import certificate
 from . import intake
 from . import model
+from . import plain
+from . import preview as pv
 from . import theme
 from .model import APP_NAME, APP_VERSION, JobSpec, Settings
 from .plain import KEPT_WORDS
@@ -44,9 +47,10 @@ MONO = ("Menlo", 11) if sys.platform == "darwin" else (("Consolas", 10) if os.na
 LEVEL_MARK = {"ok": "\u2713", "warn": "!", "block": "\u2715"}
 MATCH_ON_LABELS = {"patientid": "Patient ID in the scans", "folder": "sub-folder name"}
 MATCH_ON_KEYS = {v: k for k, v in MATCH_ON_LABELS.items()}
-STEP_TITLES = ("Open your scans", "Which scans do you want?", "What should be removed?", "Save and go")
-STEP_SHORT = ("Open", "Scans", "Remove", "Save")
-LAST_STEP = len(STEP_TITLES) - 1
+STEP_TITLES = ("Open your scans", "Which scans do you want?", "What should be removed?", "Save and go", "Done")
+STEP_SHORT = ("Open", "Scans", "Remove", "Save", "Done")
+SAVE_STEP, DONE_STEP = 3, 4
+THUMB = 40          # pixels: the picture beside each kind of series on step 2
 LIST_MODES = ("manifest", "mapping")      # the methods behind "I already have a patient list"; one patient = open its folder
 WRAP = 900
 SERIES_CHOICES = (
@@ -55,13 +59,13 @@ SERIES_CHOICES = (
     ("choose", "Let me choose", "tick the kinds of series to keep in the list below"),
 )
 KEEP_OPTIONS = (
-    ("keep_sex", "Sex", "the reader can see male or female"),
-    ("keep_age_5y", "Age, as a 5-year band", "for example 55 to 59; the date of birth is still removed"),
+    ("keep_sex", "Sex", ""),
+    ("keep_age_5y", "Age, as a 5-year band", "e.g. 55 to 59"),
     ("keep_weight_height", "Weight and height", ""),
-    ("shift_dates", "Dates, moved by a secret number of days", "the gaps between a patient's scans stay true; the real dates do not"),
-    ("keep_manufacturer", "Scanner make and model", "a reader may guess the hospital from it"),
-    ("keep_technical", "Scanner technical details", "reconstruction kernel and scan options"),
-    ("keep_institution", "Hospital name", "the output then names the centre"),
+    ("shift_dates", "Dates, moved by a secret number of days", "gaps stay true"),
+    ("keep_manufacturer", "Scanner make and model", "may hint at the hospital"),
+    ("keep_technical", "Scanner technical details", "kernel, scan options"),
+    ("keep_institution", "Hospital name", "names the centre"),
 )
 CUSTOM_PROFILE = "chosen_in_the_app.json"
 DEST_PROBLEMS = ("Choose an output folder", "Choose a confidential folder", "The confidential folder must be outside",
@@ -69,8 +73,9 @@ DEST_PROBLEMS = ("Choose an output folder", "Choose a confidential folder", "The
 HELP_STEPS = (
     ("Open", "Choose the folder that holds the scans. One patient or a whole cohort."),
     ("Choose scans", "Coronary CT only, everything, or tick the kinds of series you want."),
-    ("Choose what to remove", "Everything identifying, or keep a few things a study needs."),
-    ("Save and check", "Copies are written to a new folder, then every file is re-read for identifiers."),
+    ("What to remove", "Everything identifying, or keep a few things a study needs."),
+    ("Save", "Copies go to a new folder, then every file is re-read for identifiers."),
+    ("Done", "See the result, open the certificate, hand over."),
 )
 HELP_QA = (
     ("Are my original scans changed?",
@@ -201,6 +206,46 @@ class Tooltip:
             self._win = None
 
 
+class ChangeCard(ttk.Frame):
+    """What anonymising does to one example file, in ordinary words: 'Name   SMITH JOHN   DEMO-001'."""
+
+    def __init__(self, parent, columns: int = 1, wrap: int = 420, **kw):
+        super().__init__(parent, padding=(14, 10, 14, 10), style=theme.style_or("Card.TFrame"), **kw)
+        self.columns, self.wrap = columns, wrap
+        self.v_title, self.v_more = tk.StringVar(), tk.StringVar()
+        ttk.Label(self, textvariable=self.v_title, style="H2.TLabel").grid(row=0, column=0, sticky="w")
+        self.body = ttk.Frame(self)
+        self.body.grid(row=1, column=0, sticky="w", pady=(6, 0))
+        self.lbl_more = ttk.Label(self, textvariable=self.v_more, style="Muted.TLabel", wraplength=wrap, justify="left")
+        self.lbl_more.grid(row=2, column=0, sticky="w", pady=(6, 0))
+        self.struck = tkfont.nametofont("TkDefaultFont").copy()
+        self.struck.configure(overstrike=1)
+        self.bold = tkfont.nametofont("TkDefaultFont").copy()
+        self.bold.configure(weight="bold")
+
+    @staticmethod
+    def _cut(s: str, n: int) -> str:
+        return s if len(s) <= n else s[:n - 1] + "\u2026"
+
+    def show(self, title: str, changes: list, more: str) -> None:
+        self.v_title.set(title)
+        self.v_more.set(more)
+        for w in self.body.winfo_children():
+            w.destroy()
+        per_col = -(-len(changes) // self.columns) if changes else 0
+        pal = theme.palette()
+        for i, c in enumerate(changes):
+            col, row = (i // per_col) * 4, i % per_col
+            ttk.Label(self.body, text=c.label, style="Muted.TLabel").grid(row=row, column=col, sticky="w", padx=((0 if col == 0 else 28), 10), pady=1)
+            kept = c.state == "kept"
+            ttk.Label(self.body, text=self._cut(c.before, 22), font=("TkDefaultFont" if kept else self.struck)).grid(row=row, column=col + 1, sticky="w", padx=(0, 10))
+            colour = {"removed": pal["muted"], "replaced": brand.TEAL_DARK, "kept": pal["warn"]}[c.state]
+            ttk.Label(self.body, text=self._cut(c.after, 26), foreground=colour, font=self.bold).grid(row=row, column=col + 2, sticky="w")
+
+    def message(self, title: str, text: str) -> None:
+        self.show(title, [], text)
+
+
 def help_mark(parent, text: str) -> ttk.Label:
     q = ttk.Label(parent, text="?", style="Muted.TLabel", cursor="question_arrow")
     Tooltip(q, text)
@@ -238,6 +283,9 @@ class App(tk.Tk):
         self._scan_result: intake.Intake | None = None
         self._ids_edited = False
         self._auto_dirs = ("", "")                    # the output / confidential folders this app last suggested
+        self.kind_thumbs: dict[tuple, tk.PhotoImage] = {}
+        self._thumb_queue: list = []
+        self._card_key: tuple | None = None
         self.title(f"{APP_NAME} {APP_VERSION}")
         self.minsize(1040, 800)
         geo = self.settings.get("geometry")
@@ -320,6 +368,9 @@ class App(tk.Tk):
         self.v_prefix = tk.StringVar(value="ANON")
         self.v_one_id = tk.StringVar()
         self.v_nav_reason = tk.StringVar(value="")
+        self.v_done_head = tk.StringVar(value="")
+        self.v_done_detail = tk.StringVar(value="")
+        self.v_show_log = tk.BooleanVar(value=False)
         self.v_banner = tk.StringVar(value="")
 
     def _make_menu(self) -> None:
@@ -337,6 +388,8 @@ class App(tk.Tk):
         r.add_command(label="Anonymise", command=self._start_run)
         r.add_command(label="Stop", command=self._stop)
         r.add_command(label="Check the output", command=self._start_verify)
+        r.add_command(label="Results", command=lambda: self._goto_step(DONE_STEP))
+        r.add_command(label="Details: series decisions, check report, sharing checks", command=lambda: self._show_details("series"))
         r.add_separator()
         r.add_command(label="Viewer: preview original scans...", command=lambda: self._viewer("source"))
         r.add_command(label="Viewer: check anonymised output...", command=lambda: self._viewer("output"))
@@ -370,10 +423,21 @@ class App(tk.Tk):
         self.banner = tk.Label(self, textvariable=self.v_banner, anchor="w", padx=16, pady=5, font=("TkDefaultFont", 12))
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, padx=12, pady=(8, 0))
-        self.tab_home, self.tab_run, self.tab_series, self.tab_verify, self.tab_share, self.tab_help = (ttk.Frame(self.nb, padding=12) for _ in range(6))
-        for tab, name in ((self.tab_home, "Home"), (self.tab_run, "1  Anonymise"), (self.tab_series, "2  Check series"), (self.tab_verify, "3  Verify output"),
-                          (self.tab_share, "4  Share safely"), (self.tab_help, "Help")):
+        self.tab_home, self.tab_run, self.tab_details, self.tab_help = (ttk.Frame(self.nb, padding=12) for _ in range(4))
+        for tab, name in ((self.tab_home, "Home"), (self.tab_run, "Anonymise"), (self.tab_details, "Details"), (self.tab_help, "Help")):
             self.nb.add(tab, text=name)
+        # The detail behind the results screen (series decisions, the check report, the sharing checks) is a tab that
+        # stays hidden until asked for. Not a second window: on macOS, Tk redraws for ever when a window that has
+        # never been shown is filled with data.
+        self.nb.hide(self.tab_details)
+        dtop = ttk.Frame(self.tab_details)
+        dtop.pack(fill="x", pady=(0, 8))
+        ttk.Button(dtop, text="\u2039 Back to the results", command=lambda: self._goto_step(DONE_STEP)).pack(side="left")
+        self.nb_details = ttk.Notebook(self.tab_details)
+        self.nb_details.pack(fill="both", expand=True)
+        self.tab_series, self.tab_verify, self.tab_share = (ttk.Frame(self.nb_details, padding=12) for _ in range(3))
+        for tab, name in ((self.tab_series, "Series decisions"), (self.tab_verify, "Check report"), (self.tab_share, "Sharing checks and logs")):
+            self.nb_details.add(tab, text=name)
         self.brand_titles: list = []
         self._build_home_tab()
         self._build_run_tab()
@@ -419,13 +483,13 @@ class App(tk.Tk):
         ttk.Label(recent, textvariable=self.v_home_recent, wraplength=COL - 40, justify="left").pack(anchor="w")
         rb = ttk.Frame(recent)
         rb.pack(anchor="w", pady=(8, 0))
-        self.b_home_continue = ttk.Button(rb, text="Continue", command=lambda: self._goto_step(LAST_STEP))
+        self.b_home_continue = ttk.Button(rb, text="Continue", command=lambda: self._goto_step(SAVE_STEP))
         self.b_home_continue.pack(side="left")
-        ttk.Button(rb, text="Share safely", command=lambda: self.nb.select(self.tab_share)).pack(side="left", padx=(8, 0))
+        ttk.Button(rb, text="Results", command=lambda: self._goto_step(DONE_STEP)).pack(side="left", padx=(8, 0))
         ttk.Button(rb, text="Open output folder", command=lambda: self._open(self._out())).pack(side="left", padx=(8, 0))
         steps = ttk.Frame(box)
         steps.grid(row=4, column=0, sticky="ew", pady=(40, 0))
-        for i in range(4):
+        for i in range(len(HELP_STEPS)):
             steps.columnconfigure(i, weight=1, uniform="step")
         for i, (title, text) in enumerate(HELP_STEPS):
             f = ttk.Frame(steps)
@@ -437,7 +501,7 @@ class App(tk.Tk):
             num.create_text(14, 14, text=str(i + 1), fill="white", font=("Helvetica Neue", 12, "bold"))
             num.pack(side="left", padx=(0, 8))
             ttk.Label(row, text=title, style="H2.TLabel").pack(side="left")
-            ttk.Label(f, text=text, style="Muted.TLabel", wraplength=190, justify="left").pack(anchor="w", pady=(4, 0))
+            ttk.Label(f, text=text, style="Muted.TLabel", wraplength=150, justify="left").pack(anchor="w", pady=(4, 0))
 
     def _refresh_home(self) -> None:
         out = self._out()
@@ -481,7 +545,7 @@ class App(tk.Tk):
     def _build_run_tab(self) -> None:
         t = self.tab_run
         t.columnconfigure(0, weight=1)
-        t.rowconfigure(4, weight=1)
+        t.rowconfigure(1, weight=1)
         toggle = theme.style_or("Toggle.TButton")
         switch = theme.style_or("Switch.TCheckbutton")
         accent = theme.style_or("Accent.TButton")
@@ -593,9 +657,16 @@ class App(tk.Tk):
         kc.grid(row=0, column=0, sticky="nsew")
         kc.columnconfigure(0, weight=1)
         kc.rowconfigure(0, weight=1)
-        self.tv_kinds = self._tree(kc, [("use", "Keep", 50), ("mod", "Type", 55), ("desc", "Series", 290), ("slice", "Slice", 70), ("in", "Found in", 100),
-                                        ("images", "Images", 70), ("note", "What it is", 290)], height=7, xscroll=False)
+        self.tv_kinds = self._tree(kc, [("use", "Keep", 50), ("mod", "Type", 55), ("desc", "Series", 270), ("slice", "Slice", 70), ("in", "Found in", 100),
+                                        ("images", "Images", 70), ("note", "What it is", 270)], height=5, xscroll=False)
+        # a picture of each kind in the tree column: a clinician recognises the coronary series by eye
+        ttk.Style(self).configure("Kinds.Treeview", rowheight=THUMB + 6)
+        self.tv_kinds.configure(show="tree headings", style="Kinds.Treeview")
+        self.tv_kinds.column("#0", width=THUMB + 22, minwidth=THUMB + 22, stretch=False, anchor="center")
+        self.tv_kinds.heading("#0", text="")
         self.tv_kinds.bind("<ButtonRelease-1>", self._kind_click)
+        fk.rowconfigure(0, weight=1)
+        s2.rowconfigure(2, weight=1)
         krow = ttk.Frame(fk)
         krow.grid(row=1, column=0, sticky="ew", pady=(6, 0))
         ttk.Label(krow, textvariable=self.v_plan, style="H2.TLabel").pack(side="left")
@@ -611,9 +682,13 @@ class App(tk.Tk):
 
         # ---- step 3: what to remove
         s3 = self.steps[2]
-        f3 = ttk.Frame(s3)
-        f3.grid(row=1, column=0, columnspan=5, sticky="nsew")
-        f3.columnconfigure(1, weight=1)
+        body3 = ttk.Frame(s3)
+        body3.grid(row=1, column=0, columnspan=5, sticky="nsew")
+        body3.columnconfigure(1, weight=1)
+        f3 = ttk.Frame(body3)
+        f3.grid(row=0, column=0, sticky="nw")
+        self.card_remove = ChangeCard(body3, columns=1, wrap=380)
+        self.card_remove.grid(row=0, column=1, sticky="ne", padx=(20, 0))
         ttk.Radiobutton(f3, text="Everything that identifies the patient, the hospital or the scanner", value="default", variable=self.v_strip_choice,
                         command=self._strip_changed).grid(row=0, column=0, columnspan=3, sticky="w", pady=2)
         ttk.Label(f3, text="Recommended. This is what a blinded read needs.", style="Muted.TLabel").grid(row=1, column=0, columnspan=3, sticky="w", padx=(28, 0))
@@ -631,13 +706,13 @@ class App(tk.Tk):
                         command=self._strip_changed).grid(row=4, column=0, columnspan=3, sticky="w", pady=(10, 2))
         prow = ttk.Frame(f3)
         prow.grid(row=5, column=0, columnspan=3, sticky="w", padx=(28, 0))
-        self.cb_profile = ttk.Combobox(prow, textvariable=self.v_profile_label, state="readonly", width=40)
+        self.cb_profile = ttk.Combobox(prow, textvariable=self.v_profile_label, state="readonly", width=34)
         self.cb_profile.pack(side="left")
         self.cb_profile.bind("<<ComboboxSelected>>", lambda _e: self._profile_chosen())
         self.b_edit_profiles = ttk.Button(prow, text="Edit...", command=self._edit_profiles)
         self.b_edit_profiles.pack(side="left", padx=(8, 0))
         ttk.Label(f3, text="Always removed, whatever you choose: names, date of birth, hospital and NHS numbers, addresses, doctors' names, accession numbers, "
-                           "comments, private vendor tags and the original UIDs.", style="Muted.TLabel", wraplength=WRAP, justify="left").grid(row=6, column=0, columnspan=3, sticky="w", pady=(14, 0))
+                           "comments, private vendor tags and the original UIDs.", style="Muted.TLabel", wraplength=500, justify="left").grid(row=6, column=0, columnspan=3, sticky="w", pady=(14, 0))
 
         # ---- step 4: new IDs, where to save, go
         s4 = self.steps[3]
@@ -705,10 +780,41 @@ class App(tk.Tk):
         self.lbl_ready = ttk.Label(s4, textvariable=self.v_ready, wraplength=WRAP, justify="left")
         self.lbl_ready.grid(row=9, column=0, columnspan=5, sticky="w", pady=(8, 0))
 
+        # ---- step 5: done. One headline, the things to do next, what still needs a human, and what was removed
+        s5 = self.steps[4]
+        hero = ttk.Frame(s5)
+        hero.grid(row=1, column=0, columnspan=5, sticky="ew", pady=(4, 0))
+        self.cv_done = tk.Canvas(hero, width=60, height=60, highlightthickness=0, bg=brand._parent_bg(hero))
+        self.cv_done.pack(side="left")
+        ht = ttk.Frame(hero)
+        ht.pack(side="left", padx=(16, 0))
+        self.lbl_done_head = ttk.Label(ht, textvariable=self.v_done_head, font=("Helvetica Neue", 20, "bold"), wraplength=WRAP - 100, justify="left")
+        self.lbl_done_head.pack(anchor="w")
+        ttk.Label(ht, textvariable=self.v_done_detail, style="Muted.TLabel", wraplength=WRAP - 100, justify="left").pack(anchor="w", pady=(2, 0))
+        dact = ttk.Frame(s5)
+        dact.grid(row=2, column=0, columnspan=5, sticky="w", pady=(16, 0))
+        self.b_done_view = ttk.Button(dact, text="View the scans", style=accent, command=lambda: self._viewer("output"))
+        self.b_done_open = ttk.Button(dact, text="Open the folder", command=lambda: self._open(self._out()))
+        self.b_done_hand = ttk.Button(dact, text="Hand over", command=self._handover)
+        self.b_done_cert = ttk.Button(dact, text="Certificate (PDF)", command=self._open_certificate)
+        self.b_done_check = ttk.Button(dact, text="Check again", command=self._start_verify)
+        self.b_done_details = ttk.Button(dact, text="Details...", command=lambda: self._show_details("series"))
+        for i, b in enumerate((self.b_done_view, self.b_done_open, self.b_done_hand, self.b_done_cert, self.b_done_check, self.b_done_details)):
+            b.pack(side="left", padx=(0 if i == 0 else 8, 0), ipady=6)
+        Tooltip(self.b_done_hand, "Compares every file with the checksum list written at the check, then opens the folder. Only an unchanged output is handed over.")
+        Tooltip(self.b_done_cert, "A one-page record of what was anonymised and checked. It carries no patient identifiers and travels with the output.")
+        Tooltip(self.b_done_details, "Every series decision, the full check report (and extra words to search for), and the sharing checks.")
+        self.f_issues = ttk.Frame(s5)
+        self.f_issues.grid(row=3, column=0, columnspan=5, sticky="ew", pady=(14, 0))
+        self.card_done = ChangeCard(s5, columns=2, wrap=WRAP - 60)
+        self.card_done.grid(row=4, column=0, columnspan=5, sticky="w", pady=(14, 0))
+        ttk.Button(s5, text="Open a different output folder...", command=self._choose_output).grid(row=5, column=0, columnspan=2, sticky="w", pady=(14, 0))
+
         # ---- one slim row under the steps: what Next is waiting for, and the rarely used actions
         nav = ttk.Frame(t, padding=(8, 2))
         nav.grid(row=2, column=0, sticky="ew")
-        ttk.Label(nav, textvariable=self.v_nav_reason, style="Warn.TLabel", wraplength=760, justify="left").pack(side="left")
+        ttk.Label(nav, textvariable=self.v_nav_reason, style="Warn.TLabel", wraplength=700, justify="left").pack(side="left")
+        ttk.Checkbutton(nav, text="Activity log", variable=self.v_show_log, command=self._toggle_log, style=toggle).pack(side="right", padx=(8, 0))
         more = ttk.Menubutton(nav, text="More")
         mm = tk.Menu(more, tearoff=False)
         mm.add_command(label="Show the command this will run", command=self._show_command)
@@ -743,11 +849,12 @@ class App(tk.Tk):
         self.bar = ttk.Progressbar(prog, variable=self.v_progress, maximum=100)
         self.bar.grid(row=0, column=0, sticky="ew")
         ttk.Label(prog, textvariable=self.v_progress_text, style="Muted.TLabel").grid(row=1, column=0, sticky="w", pady=(3, 0))
-        logf = ttk.Frame(t, padding=(8, 0))
+        logf = self.f_log = ttk.Frame(t, padding=(8, 0))        # the engine's own words: hidden until asked for
         logf.grid(row=4, column=0, sticky="nsew")
         logf.columnconfigure(0, weight=1)
         logf.rowconfigure(0, weight=1)
-        self.log = tk.Text(logf, font=MONO, wrap="none", state="disabled", height=3, width=60, undo=False)
+        logf.grid_remove()
+        self.log = tk.Text(logf, font=MONO, wrap="none", state="disabled", height=7, width=60, undo=False)
         ys = ttk.Scrollbar(logf, orient="vertical", command=self.log.yview)
         self.log.configure(yscrollcommand=ys.set)
         self.log.grid(row=0, column=0, sticky="nsew")
@@ -756,7 +863,7 @@ class App(tk.Tk):
         self._refresh_profile_label()
 
     def _step_nav(self, frame, index: int) -> None:
-        """Back / Next beside the step title, so navigation is in view without scrolling to the bottom bar."""
+        """The step pills and Back / Next beside the title, so navigation is always in view."""
         nav = ttk.Frame(frame)
         nav.grid(row=0, column=3, columnspan=2, sticky="e", pady=(0, 8))
         brand.StepPills(nav, len(STEP_TITLES), index, STEP_SHORT).pack(side="left", padx=(0, 14))
@@ -764,8 +871,9 @@ class App(tk.Tk):
         b_back.pack(side="left")
         if index == 0:
             b_back.state(["disabled"])
-        if index < LAST_STEP:
-            b_next = ttk.Button(nav, text="Next \u203a", width=8, style=theme.style_or("Accent.TButton"), command=lambda: self._show_step(index + 1))
+        if index < DONE_STEP:
+            b_next = ttk.Button(nav, text="Results \u203a" if index == SAVE_STEP else "Next \u203a", width=9,
+                                style=theme.style_or("Accent.TButton") if index < SAVE_STEP else "TButton", command=lambda: self._show_step(index + 1))
             b_next.pack(side="left", padx=(6, 0))
             self._top_next = getattr(self, "_top_next", {})
             self._top_next[index] = b_next
@@ -825,7 +933,7 @@ class App(tk.Tk):
         self._schedule_validate()
 
     def _show_step(self, i: int) -> None:
-        self.step = max(0, min(LAST_STEP, i))
+        self.step = max(0, min(DONE_STEP, i))
         for k, s in enumerate(self.steps):
             if k == self.step:
                 s.tkraise()
@@ -834,9 +942,152 @@ class App(tk.Tk):
         self.v_step.set(STEP_TITLES[self.step])
         if self.step == 1:
             self._fill_kinds()
-        elif self.step == LAST_STEP:
+        elif self.step == 2:
+            self._refresh_change_cards()
+        elif self.step == SAVE_STEP:
             self._fill_ids()
+        elif self.step == DONE_STEP:
+            self._refresh_done()
         self._live_validate()
+
+    def _toggle_log(self) -> None:
+        """The engine's line-by-line output, for the curious and for bug reports. Off by default."""
+        if self.v_show_log.get():
+            self.f_log.grid()
+            self.tab_run.rowconfigure(4, weight=1)
+            self.log.see("end")
+        else:
+            self.f_log.grid_remove()
+            self.tab_run.rowconfigure(4, weight=0)
+
+    # ------------------------------------------------------------------ the results screen
+    def _example(self):
+        """(file, new ID, label) of one series the run keeps, to show what anonymising does to it; None before a folder is open."""
+        it = self.intake
+        if not it or not it.units or self.v_way.get() != "folder":
+            return None
+        for u in it.units:
+            kept = intake.kept_series(u, self.v_choice.get(), self.ticked, self.overrides.get(u.new_id))
+            for s in kept or u.series:
+                if s.sample is not None:
+                    return s.sample, u.new_id.strip() or "NEW-ID", it.label(u)
+        return None
+
+    def _refresh_change_cards(self) -> None:
+        """Fill the 'what this does' card on step 3 and the 'what was removed' card on the results screen."""
+        if not hasattr(self, "card_done"):
+            return
+        ex = self._example()
+        key = (ex, self.v_profile.get(), tuple(v.get() for v in self.v_keep.values()), self.v_strip_choice.get(), self.v_keep_tech.get(), theme.current())
+        if key == self._card_key:
+            return
+        self._card_key = key
+        if ex is None:
+            self.card_remove.message("On one of your scans", "Open a folder on step 1 and this shows what happens to one of its files.")
+            self.card_done.grid_remove()
+            return
+        path, new_id, label = ex
+        try:
+            rows = pv.header_diff(path, new_id, keep_technical=self.v_keep_tech.get(), profile=model.profile_for_path(self.v_profile.get()))
+            changes, more = plain.plain_changes(rows)
+        except Exception:
+            self.card_remove.message("On one of your scans", "That file's header could not be read for the example.")
+            self.card_done.grid_remove()
+            return
+        self.card_remove.show("What this does, on one of your scans", changes, more)
+        self.card_done.show(f"What was removed, shown on {new_id}", changes, more)
+        self.card_done.grid()
+
+    def _refresh_done(self) -> None:
+        if not hasattr(self, "cv_done"):
+            return
+        st = model.done_state(self._out())
+        self.v_done_head.set(st.headline)
+        self.v_done_detail.set(st.detail)
+        pal = theme.palette()
+        colour = {"ok": brand.TEAL_DARK, "warn": brand.AMBER, "error": brand.RED, "none": pal["border"]}[st.level]
+        cv = self.cv_done
+        cv.configure(bg=brand._parent_bg(cv.master))
+        cv.delete("all")
+        cv.create_oval(3, 3, 57, 57, fill=colour, outline=colour)
+        if st.level == "ok":
+            cv.create_line(17, 31, 26, 40, 43, 21, fill="white", width=5, capstyle="round", joinstyle="round")
+        elif st.level == "error":
+            cv.create_line(20, 20, 40, 40, fill="white", width=5, capstyle="round")
+            cv.create_line(40, 20, 20, 40, fill="white", width=5, capstyle="round")
+        elif st.level == "warn":
+            cv.create_line(30, 16, 30, 34, fill="#1f2328", width=5, capstyle="round")
+            cv.create_oval(27, 40, 33, 46, fill="#1f2328", outline="#1f2328")
+        else:
+            cv.create_line(20, 30, 40, 30, fill=pal["muted"], width=5, capstyle="round")
+        running = bool(self.proc and self.proc.running)
+        something = st.level != "none"
+        self.b_done_view.state(["!disabled"] if something else ["disabled"])
+        self.b_done_open.state(["!disabled"] if something else ["disabled"])
+        self.b_done_hand.state(["!disabled"] if st.can_hand_over and not running else ["disabled"])
+        self.b_done_cert.state(["!disabled"] if st.verified else ["disabled"])
+        self.b_done_check.state(["!disabled"] if something and not running else ["disabled"])
+        self.b_done_check.configure(text="Check again" if st.verified else "Check now")
+        self.b_done_details.state(["!disabled"] if something else ["disabled"])
+        for w in self.f_issues.winfo_children():
+            w.destroy()
+        actions = {"review": ("Look at them", lambda: self._viewer("output")), "move_logs": ("Move them out...", self._move_logs),
+                   "verify": ("Check now", self._start_verify), "report": ("Open the report", lambda: self._show_details("verify"))}
+        for i, issue in enumerate(st.issues):
+            row = ttk.Frame(self.f_issues)
+            row.grid(row=i, column=0, sticky="w", pady=2)
+            mark = tk.Canvas(row, width=18, height=18, highlightthickness=0, bg=brand._parent_bg(row))
+            mark.create_oval(1, 1, 17, 17, fill=brand.AMBER, outline=brand.AMBER)
+            mark.create_text(9, 9, text="!", fill="#1f2328", font=("Helvetica Neue", 11, "bold"))
+            mark.pack(side="left", padx=(0, 8))
+            ttk.Label(row, text=issue.text, wraplength=WRAP - 260, justify="left").pack(side="left")
+            if issue.action in actions:
+                text, cmd = actions[issue.action]
+                ttk.Button(row, text=text, command=cmd).pack(side="left", padx=(12, 0))
+        self._refresh_change_cards()
+
+    def _show_details(self, which: str = "series") -> None:
+        self._refresh_all()
+        self.nb.add(self.tab_details)        # un-hide; it then stays in the tab bar
+        self.nb.select(self.tab_details)
+        self.nb_details.select({"series": self.tab_series, "verify": self.tab_verify, "share": self.tab_share}[which])
+
+    def _choose_output(self) -> None:
+        """Look at the results of an earlier run: point the app at its output folder."""
+        p = filedialog.askdirectory(title="Choose an output folder that was anonymised earlier", mustexist=True,
+                                    initialdir=str(self._out().parent if self._out() and self._out().parent.is_dir() else Path.home()))
+        if p:
+            self.v_output.set(p)
+            self._refresh_all()
+
+    def _open_certificate(self) -> None:
+        out = self._out()
+        try:
+            path = certificate.write_certificate(out) if out else None
+        except OSError as e:
+            messagebox.showerror(APP_NAME, f"The certificate could not be written:\n{e}")
+            return
+        if path is None:
+            messagebox.showinfo(APP_NAME, "There is no certificate yet: the output has to pass the check first.")
+            return
+        self._refresh_all()
+        self._open(path)
+
+    def _notify(self, message: str) -> None:
+        """Tell someone who has walked away that a long job has finished: a desktop notification where the system has
+        one built in, the bell and the window to the front everywhere."""
+        if self.selftest:
+            return
+        try:
+            self.bell()
+            cmd = model.notify_command(APP_NAME, message)
+            if cmd:
+                subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                self.deiconify()
+                self.lift()
+        except (OSError, tk.TclError):
+            pass
 
     # ------------------------------------------------------------------ the folder-first flow
     def _home_open(self) -> None:
@@ -954,6 +1205,10 @@ class App(tk.Tk):
                 self.v_confidential.set(conf)
             self.v_choice.set("coronary" if any(k.coronary for k in self.kinds) and not self.rb_choice["coronary"].instate(["disabled"]) else "all")
         self.v_found_notes.set("  ".join(notes))
+        self.kind_thumbs = {}
+        self._thumb_queue = [k for k in self.kinds if k.sample is not None]
+        self._card_key = None
+        self.after(30, self._thumb_tick)
         self._apply_way()
         self._assign_ids(force=True)
         self._fill_found()
@@ -961,6 +1216,24 @@ class App(tk.Tk):
         self._fill_ids()
         self._refresh_all()
         self._live_validate()
+
+    def _thumb_tick(self) -> None:
+        """One thumbnail per tick, so a cohort with fifty kinds of series never freezes the window."""
+        if not self._thumb_queue or not pv.viewer_available()[0]:
+            self._thumb_queue = []
+            return
+        k = self._thumb_queue.pop(0)
+        try:
+            img = pv.thumbnail(k.sample, THUMB)
+            if img is not None:
+                photo = tk.PhotoImage(data=pv.to_ppm(img))
+                self.kind_thumbs[k.key] = photo
+                if k in self.kinds and self.tv_kinds.exists(str(self.kinds.index(k))):
+                    self.tv_kinds.item(str(self.kinds.index(k)), image=photo)
+        except Exception:       # a picture is a nicety: an unreadable file must never stop the flow
+            pass
+        if self._thumb_queue:
+            self.after(5, self._thumb_tick)
 
     def _plan(self) -> intake.Plan:
         return intake.plan(self.intake, self.v_choice.get(), self.ticked, self.overrides) if self.intake else intake.Plan(0, 0, 0, [])
@@ -999,8 +1272,8 @@ class App(tk.Tk):
             else:
                 kept = choice == "all" or k.coronary > 0 or (k.maybe > 0 and not any(x.coronary for x in self.kinds))
                 mark = "\u2713" if kept else ""
-            tv.insert("", "end", iid=str(i), values=(mark, k.modality, k.description or "(no description)", k.slice_text,
-                                                      f"{k.n_units} of {n}", f"{k.n_images:,}", k.note), tags=(("keep",) if kept else ("drop",)))
+            tv.insert("", "end", iid=str(i), image=self.kind_thumbs.get(k.key, ""), values=(mark, k.modality, k.description or "(no description)", k.slice_text,
+                                                                                          f"{k.n_units} of {n}", f"{k.n_images:,}", k.note), tags=(("keep",) if kept else ("drop",)))
         theme.tag_colours(tv, ("keep", "drop"))
         text = self._plan().text(n, it.noun(n))
         if self.overrides:
@@ -1013,7 +1286,7 @@ class App(tk.Tk):
                 self.v_status.set("Choose 'Let me choose' to tick series by hand.")
             return
         row = self.tv_kinds.identify_row(e.y)
-        if not row or self.tv_kinds.identify_region(e.x, e.y) != "cell":
+        if not row or self.tv_kinds.identify_region(e.x, e.y) not in ("cell", "tree"):
             return
         key = self.kinds[int(row)].key
         (self.ticked.discard if key in self.ticked else self.ticked.add)(key)
@@ -1054,6 +1327,7 @@ class App(tk.Tk):
         self._refresh_profile_label()
         if c == "saved":
             self._profile_chosen()
+        self._refresh_change_cards()
         self._schedule_validate()
 
     def _assign_ids(self, force: bool = False) -> None:
@@ -1163,8 +1437,8 @@ class App(tk.Tk):
         if not it or not it.units:
             return False
         if not conf:
-            messagebox.showinfo(APP_NAME, "Choose where the confidential key goes first (the last step).")
-            self._goto_step(LAST_STEP)
+            messagebox.showinfo(APP_NAME, "Choose where the confidential key goes first (step 4).")
+            self._goto_step(SAVE_STEP)
             return False
         try:
             intake.run_list(conf, it)
@@ -1255,7 +1529,7 @@ class App(tk.Tk):
         c = self._container(t)
         self.tv_series = self._tree(c, [("study_id", "New ID", 100), ("series_number", "Series", 55), ("original_description", "Original series name", 220),
                                         ("images", "Images", 60), ("decision", "Decision", 70), ("reason", "Why", 300), ("run", "Run", 110)])
-        self.empty_series = self._empty(c, "No series decisions yet.\nThey appear here after a run that keeps only some series.", "Go to Anonymise", lambda: self._goto_step(0))
+        self.empty_series = self._empty(c, "No series decisions yet.\nThey appear here after a run that keeps only some series.", None)
         self.lbl_series = ttk.Label(t, text="", style="Muted.TLabel")
         self.lbl_series.pack(anchor="w", pady=(6, 0))
         self.series_rows: list[dict] = []
@@ -1289,7 +1563,7 @@ class App(tk.Tk):
         self.tv_summary = self._tree(sc, [("study_id", "New ID", 100), ("status", "Status", 110), ("files", "Files", 55), ("series", "Series", 55),
                                          ("review_files", "To _review", 75), ("errors", "Errors", 55), ("source_folder", "Original folder (confidential)", 300)], height=8)
         self.verify_frame = vf
-        self.empty_verify = self._empty(c, "Nothing to check yet.\nAnonymise some patients first; the check runs by itself when the run finishes.", "Go to Anonymise", lambda: self._goto_step(0))
+        self.empty_verify = self._empty(c, "Nothing to check yet.\nAnonymise some patients first; the check runs by itself when the run finishes.", None)
 
     def _build_share_tab(self) -> None:
         t = self.tab_share
@@ -1297,7 +1571,7 @@ class App(tk.Tk):
         ttk.Label(t, text="The whole _logs folder is confidential. Move it out before the output leaves this computer.", style="Muted.TLabel").pack(anchor="w", pady=(2, 6))
         c = self._container(t)
         self.tv_checks = self._tree(c, [("mark", "", 28), ("title", "Check", 300), ("detail", "Detail", 500)], height=7)
-        self.empty_share = self._empty(c, "Nothing to share yet.\nAnonymise some patients first.", "Go to Anonymise", lambda: self._goto_step(0))
+        self.empty_share = self._empty(c, "Nothing to share yet.\nAnonymise some patients first.", None)
         row = ttk.Frame(t)
         row.pack(fill="x", pady=8)
         self.b_handover = ttk.Button(row, text="Hand over: re-check and open the output folder", style=theme.style_or("Accent.TButton"), command=self._handover)
@@ -1340,7 +1614,7 @@ class App(tk.Tk):
             num.create_text(14, 14, text=str(i + 1), fill="white", font=("Helvetica Neue", 12, "bold"))
             num.pack(side="left", padx=(0, 8))
             ttk.Label(row, text=title, style="H2.TLabel").pack(side="left")
-            ttk.Label(f, text=text, wraplength=210, justify="left").pack(anchor="w", pady=(6, 0))
+            ttk.Label(f, text=text, wraplength=165, justify="left").pack(anchor="w", pady=(6, 0))
         ttk.Label(t, text="Common questions", style="H2.TLabel").grid(row=2, column=0, sticky="w", pady=(28, 8))
         qa = ttk.Frame(t)
         qa.grid(row=3, column=0, sticky="nsew")
@@ -1367,7 +1641,7 @@ class App(tk.Tk):
         self.v_help_q.set(q)
         self.v_help_a.set(a)
 
-    def _reference(self) -> None:
+    def _reference(self):
         """The long reference text, in its own window."""
         win = tk.Toplevel(self)
         win.title(f"{APP_NAME}: full reference")
@@ -1384,6 +1658,7 @@ class App(tk.Tk):
         theme.style_text(txt)
         ys.pack(side="right", fill="y")
         txt.pack(side="left", fill="both", expand=True)
+        return win
 
     # ================================================================== helpers
     def _out(self) -> Path | None:
@@ -1476,11 +1751,12 @@ class App(tk.Tk):
         return False
 
     def _set_running(self, running: bool) -> None:
-        for b in (self.b_dry, self.b_start, self.b_verify, self.b_share_check):
+        for b in (self.b_dry, self.b_start, self.b_verify, self.b_share_check, self.b_done_check, self.b_done_hand):
             b.state(["disabled"] if running else ["!disabled"])
         self.b_stop.state(["!disabled"] if running else ["disabled"])
         if not running:
             self._live_validate()
+            self._refresh_done()
 
     # ================================================================== theme, validation, status
     def _apply_theme_colours(self) -> None:
@@ -1489,6 +1765,9 @@ class App(tk.Tk):
             lbl.configure(foreground=brand.OFF if theme.current() == "dark" else brand.NAVY_DEEP)
         for w in (self.log, self.txt_verify):
             theme.style_text(w)
+        ttk.Style(self).configure("Kinds.Treeview", rowheight=THUMB + 6)
+        self._card_key = None
+        self._refresh_done()
         theme.tag_colours(self.log, ("error", "warn", "ok"))
         for tv in (self.tv_series, self.tv_summary, self.tv_checks, self.tv_logs):
             theme.tag_colours(tv, ("keep", "drop", "check", "block", "error", "ok", "warn"))
@@ -1559,13 +1838,16 @@ class App(tk.Tk):
             return
         steps = self._problems_by_step()
         problems = [p for s in steps for p in s]
-        so_far = [p for s in steps[:self.step + 1] for p in s]
+        so_far = [p for s in steps[:self.step + 1] for p in s] if self.step <= SAVE_STEP else []
         running = bool(self.proc and self.proc.running)
         folder = self.v_way.get() == "folder"
         top = getattr(self, "_top_next", {}).get(self.step)
         if top is not None:
-            top.state(["!disabled"] if not so_far else ["disabled"])
-        self.v_nav_reason.set(("Next needs: " + so_far[0]) if so_far and self.step < LAST_STEP else "")
+            if self.step == SAVE_STEP:      # "Results": there is something to look at as soon as an output folder exists
+                top.state(["!disabled"] if self._out() and self._out().is_dir() else ["disabled"])
+            else:
+                top.state(["!disabled"] if not so_far else ["disabled"])
+        self.v_nav_reason.set(("Next needs: " + so_far[0]) if so_far and self.step < SAVE_STEP else "")
         # in the folder-first flow the scan and the series list are the preview; a list-driven run still needs a dry run first
         previewed = folder or self.previewed_key == self._spec_key()
         if problems:
@@ -1583,6 +1865,8 @@ class App(tk.Tk):
         self.v_summary.set(self._summary_text(problems))
         self.v_summary_short.set("" if problems else "  ".join(self.v_summary.get().splitlines()[:2]))
         self.v_drive_note.set(self._drive_note())
+        if self.step == 2:
+            self._refresh_change_cards()
         self._update_banner()
 
     def _summary_text(self, problems: list[str]) -> str:
@@ -1719,6 +2003,11 @@ class App(tk.Tk):
         self._update_strip(f"{title} running...", "info")
         self._save_settings()
         self.nb.select(self.tab_run)
+        if job in ("verify", "recheck", "thick") and self.step != DONE_STEP:
+            self._show_step(DONE_STEP)
+        if job == "thick" and not self.v_show_log.get():       # this job's answer is its output: show it
+            self.v_show_log.set(True)
+            self._toggle_log()
 
     def _start_run(self, dry_run: bool = False) -> None:
         folder = self.v_way.get() == "folder"
@@ -1798,15 +2087,11 @@ class App(tk.Tk):
                 summary = next((l.strip() for l in reversed(log_text.splitlines()) if l.strip().startswith("DRY RUN")), "Preview finished.")
                 self._show_card("Preview done: nothing was written", summary + "  Look at the images and the header before/after in the viewer, then press Anonymise.",
                                 "Open viewer", lambda: self._viewer("source"))
-            if job == "run":
-                done_line = next((l.strip() for l in reversed(log_text.splitlines()) if l.strip().startswith("Done in")), "Anonymisation finished.")
-                self._show_card("Anonymised", done_line + ("  The check is running now." if self.v_verify_after.get() else "  Run the check before sharing."),
-                                "View the anonymised output", lambda: self._viewer("output"),
-                                None if self.v_verify_after.get() else "Check now", None if self.v_verify_after.get() else self._start_verify)
             if job == "verify":
-                self._show_card("Verified: safe to hand over", "Every output file was re-read and found clean. The checksum manifest and attestation are in _logs and travel with the output.",
-                                "Open the final folder", lambda: self._open(self._out()),
-                                "View the anonymised output", lambda: self._viewer("output"))
+                try:        # the certificate travels with the output from the moment it is verified
+                    certificate.write_certificate(self._out())
+                except OSError:
+                    pass
         elif stopped:
             self.v_progress_text.set(f"{title} stopped after {took}")
             self.v_status.set(f"{title} stopped")
@@ -1820,26 +2105,29 @@ class App(tk.Tk):
             self._append_log(f"({self.skipped_hidden} lines for patients skipped as already done are hidden; More > Show to see them)", "plain")
         # chaining: automatic check after a run, and the demo's three stages
         if job == "recheck":
-            self.nb.select(self.tab_share)
+            self._goto_step(DONE_STEP)
             if rc == 0:
                 self._show_card("Ready to hand over", "Every output file is byte-for-byte as it was when verified. The attestation and checksum manifest in _logs travel with it.",
                                 "Open output folder", lambda: self._open(self._out()))
             else:
                 self._show_card("Do not hand over", "Files changed, went missing or were added since verification. Run the check again, then hand over.",
                                 "Check now", self._start_verify)
-        if job == "run" and rc == 0 and self.v_verify_after.get():
+        chained = job == "run" and rc == 0 and self.v_verify_after.get()
+        if chained:
             self.after(400, self._start_verify)
-        elif job == "verify":
-            self.nb.select(self.tab_run)
+        elif job in ("run", "verify") and not stopped:
+            # the journey ends on the results screen, whatever the result; someone who walked away is told
+            self._goto_step(DONE_STEP)
+            try:
+                away = self.focus_displayof() is None
+            except (KeyError, tk.TclError):
+                away = False
+            if secs >= 20 or away:
+                self._notify(self.v_done_head.get() or f"{title} finished")
         if self.demo_stage == "run" and job == "run" and rc == 0:
             self.demo_stage = "verify"
         elif self.demo_stage == "verify" and job == "verify":
             self.demo_stage = None
-            if rc == 0:
-                self._show_card("Demo complete: anonymised and verified",
-                                "The two made-up patients went in as SMITH and JONES and came out as DEMO-001 and DEMO-002. Only their coronary series were kept, "
-                                "and every output file was re-read and found clean. Open the viewer to see the images and the header before and after.",
-                                "See the anonymised scans", lambda: self._viewer("output"), "Open the output folder", lambda: self._open(self._out()))
         elif self.demo_stage and (rc != 0 or stopped):
             self.demo_stage = None
 
@@ -1851,7 +2139,7 @@ class App(tk.Tk):
                             "Resume", lambda: (self.v_resume.set(True), self._start_run()))
         elif job == "verify":
             self._show_card("Identifiers were found in the output", "Do not share it. The report names each file and tag. If it is a word you typed that is also a common word, refine it; if it is a real leak, report it.",
-                            "Open report", lambda: self.nb.select(self.tab_verify))
+                            "Open report", lambda: self._show_details("verify"))
         elif "folder not found" in log_text and "Done in" in log_text:
             self._show_card("Some folders in the list were not found", "The run finished, but the patients whose folders are missing were skipped. Check the paths in the list (or the drive path fix) and run again with 'Skip patients already done'.",
                             "Go to step 1", lambda: self._goto_step(0))
@@ -1925,15 +2213,16 @@ class App(tk.Tk):
         exp = st.get("expected")
         n, total = st.get("n", 0), st.get("total", 0)
         where = f"patient {n} of {total}: {st.get('study', '')}" if total else st.get("study", "")
+        left = lambda pct: (lambda t: f"  \u00b7  {t}" if t else "")(model.eta_text(self.proc.elapsed() if self.proc else 0.0, pct / 100))
         if total and exp:
             pct = ((n - 1) + min(files, exp) / exp) / total * 100
             self._bar_mode(True)
             self.v_progress.set(pct)
-            text = f"{verb} {where}, {files:,} of {exp:,} files"
+            text = f"{verb} {where}, {files:,} of {exp:,} files" + left(pct)
         elif exp:
             self._bar_mode(True)
             self.v_progress.set(min(files, exp) / exp * 100)
-            text = f"{verb} {where}, {files:,} of {exp:,} files"
+            text = f"{verb} {where}, {files:,} of {exp:,} files" + left(min(files, exp) / exp * 100)
         else:
             self._bar_mode(False)
             text = f"{verb} {where}, {files:,} files so far"
@@ -2004,7 +2293,7 @@ class App(tk.Tk):
                 self.overrides[study_id] = set(sel[study_id])
             self._fill_kinds()
         self.previewed_key = self._spec_key()
-        self._goto_step(LAST_STEP)
+        self._goto_step(SAVE_STEP)
         self._live_validate()
         self.v_ready.set(f"{n} ticked series saved for {study_id}. Press Anonymise.")
         self.lbl_ready.configure(style="Ok.TLabel")
@@ -2048,6 +2337,7 @@ class App(tk.Tk):
         self._refresh_series()
         self._refresh_verify()
         self._refresh_share()
+        self._refresh_done()
         self._update_strip()
 
     def _schedule_output_refresh(self) -> None:
@@ -2230,7 +2520,7 @@ class App(tk.Tk):
 
     def _demo_play(self) -> None:
         self.demo_stage = "run"
-        self._goto_step(LAST_STEP)
+        self._goto_step(SAVE_STEP)
         self.after(300, self._start_run)
 
     # ================================================================== lifecycle
@@ -2261,9 +2551,18 @@ class App(tk.Tk):
             return False
 
         messagebox.showerror = messagebox.showinfo = messagebox.askokcancel = messagebox.askyesno = recorded
-        for tab in (self.tab_home, self.tab_run, self.tab_series, self.tab_verify, self.tab_share, self.tab_help):
+        for tab in (self.tab_home, self.tab_run, self.tab_help):
             self.nb.select(tab)
             self.update()
+        for which in ("series", "verify", "share"):
+            self._show_details(which)
+            self.update()
+        self.nb.select(self.tab_run)
+        self.v_show_log.set(True)
+        self._toggle_log()
+        self.update()
+        self.v_show_log.set(False)
+        self._toggle_log()
         for i in range(len(STEP_TITLES)):
             self._show_step(i)
             self.update()
@@ -2280,11 +2579,9 @@ class App(tk.Tk):
         self._apply_way()
         self.nb.select(self.tab_run)
         self._show_step(0)
-        self._reference()
+        ref = self._reference()
         self.update()
-        for w in self.winfo_children():
-            if isinstance(w, tk.Toplevel):
-                w.destroy()
+        ref.destroy()
         self.update()
         for mode in ("source", "output"):
             w = open_viewer(self, mode)
@@ -2327,7 +2624,11 @@ class App(tk.Tk):
             kept = sum(1 for _ in (out / "DEMO-001").rglob("*.dcm"))
             if kept != 120:
                 raise RuntimeError(f"coronary-only demo wrote {kept} files for DEMO-001, expected 120")
-            print("selftest: demo folder opened, coronary series anonymised and verified for two made-up patients (PASS)", flush=True)
+            if self.step != DONE_STEP or not self.v_done_head.get().endswith("anonymised and verified"):
+                raise RuntimeError(f"the results screen does not show a verified run: step {self.step}, {self.v_done_head.get()!r}")
+            if not list((out / "_logs").glob("certificate_*.pdf")):
+                raise RuntimeError("no certificate was written for the verified demo output")
+            print("selftest: demo folder opened, coronary series anonymised and verified, results screen and certificate shown (PASS)", flush=True)
         finally:
             model.settings_path = real
             shutil.rmtree(tmp, ignore_errors=True)

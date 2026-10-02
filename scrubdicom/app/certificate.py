@@ -137,7 +137,7 @@ def _pdf(content: str, title: str, created: str) -> bytes:
         offsets.append(len(out))
         out += b"%d 0 obj\n" % i + body + b"\nendobj\n"
     xref = len(out)
-    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    out += b"xref\n0 %d\n%010d 65535 f \n" % (len(objs) + 1, 0)       # the free-list head: ten zeros
     for off in offsets:
         out += b"%010d 00000 n \n" % off
     out += b"trailer\n<< /Size %d /Root 1 0 R /Info %d 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, len(objs), xref)

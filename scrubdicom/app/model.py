@@ -488,6 +488,90 @@ def latest_attestation(logs: Path) -> Path | None:
     return latest(logs, "attestation", (".json",))
 
 
+@dataclass
+class Issue:
+    text: str
+    action: str     # review | move_logs | verify | report | "" : which button the results screen offers beside it
+
+
+@dataclass
+class DoneState:
+    """What the results screen says about an output folder: one headline, one line of detail, and what still needs a human."""
+    level: str          # none | warn | ok | error
+    headline: str
+    detail: str
+    issues: list[Issue]
+    verified: bool = False
+    can_hand_over: bool = False
+    patients: int = 0
+    files: int = 0
+
+
+def done_state(out: Path | None) -> DoneState:
+    if not out or not Path(out).is_dir():
+        return DoneState("none", "Nothing has been anonymised yet", "Work through the steps, or open an output folder from an earlier run.", [])
+    out = Path(out)
+    logs = out / "_logs"
+    done, partial = study_state(out)
+    if not done and not partial:
+        return DoneState("none", "Nothing has been anonymised yet", "Work through the steps, or open an output folder from an earlier run.", [])
+    n = len(done)
+    who = f"{n} {'patient' if n == 1 else 'patients'}"
+    status, rep, _ = verify_status(logs)
+    checks = share_readiness(out)
+    stale = any(c.title.startswith("Check passed, but files have changed") for c in checks)
+    issues: list[Issue] = []
+    if partial:
+        issues.append(Issue(f"{len(partial)} unfinished. {'It is' if len(partial) == 1 else 'They are'} redone on the next run and must not be shared.", ""))
+    n_rev = review_count(out)
+    if n_rev:
+        issues.append(Issue(f"{n_rev} {'file was' if n_rev == 1 else 'files were'} held back and {'needs' if n_rev == 1 else 'need'} a look. "
+                            "They may carry a name burned into the picture.", "review"))
+    if linkage_files(out):
+        issues.append(Issue("The confidential key is inside the output folder. Move it out before sharing.", "move_logs"))
+    elif [f for f in confidential_log_files(logs) if not f.name.upper().startswith("LINKAGE_")]:
+        issues.append(Issue("Confidential logs are inside the output folder. Move them out before sharing.", "move_logs"))
+    blocked = any(c.level == "block" for c in checks)
+    files = 0
+    att = latest_attestation(logs)
+    if att:
+        try:
+            files = int(json.loads(att.read_text(encoding="utf-8")).get("output", {}).get("files_verified", 0) or 0)
+        except (OSError, ValueError, TypeError):
+            files = 0
+    if status == "FAIL":
+        return DoneState("error", "Check failed: do not share", "Something identifying was found in the output. Open the report to see what and where.",
+                         [Issue("The check report lists every problem found.", "report")] + issues, False, False, n, files)
+    if status != "PASS" or stale:
+        head = f"{who} anonymised, not yet checked" if status != "PASS" else f"{who} anonymised, but changed since the last check"
+        return DoneState("warn", head, "Run the check before sharing anything.", [Issue("The output has not been checked in its present state.", "verify")] + issues,
+                         False, False, n, files)
+    detail = (f"{files:,} files, every one re-read and found clean." if files else "Every file was re-read and found clean.")
+    return DoneState("ok", f"{who} anonymised and verified", detail, issues, True, not blocked, n, files)
+
+
+def eta_text(elapsed_s: float, fraction: float) -> str:
+    """'about 4 min left' from how long it has taken to get this far. Empty until there is enough to go on."""
+    if elapsed_s < 8 or fraction < 0.03 or fraction >= 1:
+        return ""
+    left = elapsed_s * (1 - fraction) / fraction
+    if left < 50:
+        return "under a minute left"
+    mins = round(left / 60)
+    if mins < 90:
+        return f"about {max(1, mins)} min left"
+    return f"about {mins // 60} h {mins % 60:02d} min left"
+
+
+def notify_command(title: str, message: str) -> list[str] | None:
+    """The command that shows a desktop notification, where the system has one built in (macOS). No network, no dependency.
+    Elsewhere None: the window rings the bell and comes to the front instead."""
+    if sys.platform != "darwin":
+        return None
+    q = lambda t: t.replace("\\", " ").replace('"', "'").replace("\n", " ")
+    return ["osascript", "-e", f'display notification "{q(message)}" with title "{q(title)}"']
+
+
 def share_readiness(out: Path, confidential: str = "") -> list[Check]:
     """What stands between this output tree and handing it to a reader. 'block' items must be fixed; 'warn'
     items need a decision by a human."""

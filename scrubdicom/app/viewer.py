@@ -15,6 +15,7 @@ compressed pixel data) but no Pillow. Everything that is not a widget lives in p
 from __future__ import annotations
 
 import math
+import gc
 import queue
 import sys
 import threading
@@ -362,6 +363,7 @@ class ViewerWindow(tk.Toplevel):
                         self._q.put(("thumb", mode, sid, s.uid, pv.to_ppm(img)))
             except Exception as e:
                 self._q.put(("error", str(e)))
+        gc.collect()      # finalise closed windows' Tk variables on this thread, not from the worker's collector
         threading.Thread(target=work, daemon=True).start()
 
     def _poll(self) -> None:
